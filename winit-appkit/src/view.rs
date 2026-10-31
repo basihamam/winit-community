@@ -2,6 +2,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 use dpi::{LogicalPosition, PhysicalSize};
 use objc2::rc::Retained;
@@ -10,12 +11,12 @@ use objc2::{AnyThread, DefinedClass, MainThreadMarker, Message, define_class, ms
 use objc2_app_kit::{
     NSApplication, NSCursor, NSDragOperation, NSDraggingSession, NSEvent, NSEventPhase,
     NSResponder, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
-    NSViewLayerContentsRedrawPolicy, NSWindow,
+    NSViewLayerContentsRedrawPolicy, NSWindow, NSWindowStyleMask,
 };
 use objc2_core_foundation::CGRect;
 use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSCopying, NSMutableAttributedString,
-    NSNotFound, NSObject, NSPoint, NSRange, NSRect, NSSize, NSString, NSUInteger,
+    NSNotFound, NSObject, NSPoint, NSProcessInfo, NSRange, NSRect, NSSize, NSString, NSUInteger,
 };
 use tracing::{debug_span, trace_span};
 use winit_common::text::utf16_to_utf8_offset;
@@ -129,6 +130,15 @@ pub struct ViewState {
     phys_modifiers: RefCell<HashMap<Key, ModLocationMask>>,
     ime_state: Cell<ImeState>,
     input_source: RefCell<String>,
+
+    /// The contents of the current text input, without marked text.
+    surrounding_text: RefCell<Retained<NSString>>,
+    /// Offset (in UTF-16 code units) of the cursor in the current text
+    /// input.
+    cursor_offset: Cell<usize>,
+    /// Offset (in UTF-16 code units) of the selection anchor in the current
+    /// text input. Will be equal to the cursor if there is no selection.
+    anchor_offset: Cell<usize>,
 
     /// True if this view was in a preedit session that will result in a commit.
     pending_commit: Cell<bool>,
@@ -257,8 +267,10 @@ define_class!(
         #[unsafe(method(selectedRange))]
         fn selected_range(&self) -> NSRange {
             let _entered = debug_span!("selectedRange").entered();
-            // Documented to return `{NSNotFound, 0}` if there is no selection.
-            NSRange::new(NSNotFound as NSUInteger, 0)
+            let cursor = self.ivars().cursor_offset.get();
+            let anchor = self.ivars().anchor_offset.get();
+            let (start, end) = if anchor < cursor { (anchor, cursor) } else { (cursor, anchor) };
+            NSRange::new(start, end - start)
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
@@ -266,10 +278,19 @@ define_class!(
             &self,
             string: &NSObject,
             selected_range: NSRange,
-            _replacement_range: NSRange,
+            replacement_range: NSRange,
         ) {
-            // TODO: Use _replacement_range, requires changing the event to report surrounding text.
             let _entered = debug_span!("setMarkedText:selectedRange:replacementRange:").entered();
+
+            // Try to send `DeleteSurrounding`
+            if let Some((before_bytes, after_bytes)) =
+                self.compute_delete_surrounding_from_range(replacement_range)
+            {
+                self.queue_event(WindowEvent::Ime(Ime::DeleteSurrounding {
+                    before_bytes,
+                    after_bytes,
+                }));
+            }
 
             let (marked_text, string) = if let Some(string) =
                 string.downcast_ref::<NSAttributedString>()
@@ -349,12 +370,25 @@ define_class!(
         #[unsafe(method_id(attributedSubstringForProposedRange:actualRange:))]
         fn attributed_substring_for_proposed_range(
             &self,
-            _range: NSRange,
-            _actual_range: *mut NSRange,
+            range: NSRange,
+            actual_range: *mut NSRange,
         ) -> Option<Retained<NSAttributedString>> {
             let _entered =
                 trace_span!("attributedSubstringForProposedRange:actualRange:").entered();
-            None
+            let length = self.ivars().surrounding_text.borrow().length();
+            if range.location >= length {
+                None
+            } else {
+                // The range we got might be out of bounds, so clamp it to the surrounding text.
+                let clamped_length = std::cmp::min(length - range.location, range.length);
+                let actual = NSRange::new(range.location, clamped_length);
+                if !actual_range.is_null() {
+                    unsafe { *actual_range = actual };
+                }
+                let substring = self.ivars().surrounding_text.borrow().substringWithRange(actual);
+                let attributed_string = NSAttributedString::from_nsstring(&substring);
+                Some(attributed_string)
+            }
         }
 
         #[unsafe(method(characterIndexForPoint:))]
@@ -383,8 +417,7 @@ define_class!(
         }
 
         #[unsafe(method(insertText:replacementRange:))]
-        fn insert_text(&self, string: &NSObject, _replacement_range: NSRange) {
-            // TODO: Use _replacement_range, requires changing the event to report surrounding text.
+        fn insert_text(&self, string: &NSObject, replacement_range: NSRange) {
             let _entered = debug_span!("insertText:replacementRange:").entered();
 
             let string = if let Some(string) = string.downcast_ref::<NSAttributedString>() {
@@ -405,6 +438,16 @@ define_class!(
             // Some IMEs send insertText for all typing (e.g. spaces, English chars)
             // which should go through keyboard input instead of paste.
             if pending_commit && ime_enabled && !is_control {
+                // Try to send `DeleteSurrounding`
+                if let Some((before_bytes, after_bytes)) =
+                    self.compute_delete_surrounding_from_range(replacement_range)
+                {
+                    self.queue_event(WindowEvent::Ime(Ime::DeleteSurrounding {
+                        before_bytes,
+                        after_bytes,
+                    }));
+                }
+
                 self.ivars().pending_commit.set(false);
                 self.queue_event(WindowEvent::Ime(Ime::Commit(string)));
                 self.ivars().ime_state.set(ImeState::Committed);
@@ -657,7 +700,7 @@ define_class!(
             if self.handle_event(event) {
                 return;
             }
-            self.mouse_motion(event);
+            self.mouse_motion_at(event, self.fullscreen_mouse_position());
         }
 
         #[unsafe(method(mouseDragged:))]
@@ -666,7 +709,7 @@ define_class!(
             if self.handle_event(event) {
                 return;
             }
-            self.mouse_motion(event);
+            self.mouse_motion_at(event, self.fullscreen_mouse_position());
         }
 
         #[unsafe(method(rightMouseDragged:))]
@@ -675,7 +718,7 @@ define_class!(
             if self.handle_event(event) {
                 return;
             }
-            self.mouse_motion(event);
+            self.mouse_motion_at(event, self.fullscreen_mouse_position());
         }
 
         #[unsafe(method(otherMouseDragged:))]
@@ -684,7 +727,7 @@ define_class!(
             if self.handle_event(event) {
                 return;
             }
-            self.mouse_motion(event);
+            self.mouse_motion_at(event, self.fullscreen_mouse_position());
         }
 
         #[unsafe(method(mouseEntered:))]
@@ -704,6 +747,17 @@ define_class!(
         #[unsafe(method(mouseExited:))]
         fn mouse_exited(&self, event: &NSEvent) {
             let _entered = debug_span!("mouseExited:").entered();
+
+            // The same AppKit bug can emit a spurious exit during a held gesture.
+            // Preserve actual exits, including drags outside the window.
+            if NSEvent::pressedMouseButtons() != 0 {
+                if let Some(point) = self.fullscreen_mouse_position() {
+                    let size = self.bounds().size;
+                    if pointer_inside([point.x, point.y], [size.width, size.height]) {
+                        return;
+                    }
+                }
+            }
 
             let position = self.mouse_view_point(event).to_physical(self.scale_factor());
 
@@ -872,6 +926,9 @@ impl WinitView {
             phys_modifiers: Default::default(),
             ime_state: Default::default(),
             input_source: Default::default(),
+            surrounding_text: Default::default(),
+            cursor_offset: Default::default(),
+            anchor_offset: Default::default(),
             pending_commit: Default::default(),
             ime_capabilities: Default::default(),
             forward_key_to_app: Default::default(),
@@ -1061,6 +1118,17 @@ impl WinitView {
         self.ivars().ime_size.set(size);
         let input_context = self.inputContext().expect("input context");
         input_context.invalidateCharacterCoordinates();
+    }
+
+    pub(super) fn set_ime_surrounding_text(
+        &self,
+        text: Retained<NSString>,
+        cursor: usize,
+        anchor: usize,
+    ) {
+        *self.ivars().surrounding_text.borrow_mut() = text;
+        self.ivars().cursor_offset.set(cursor);
+        self.ivars().anchor_offset.set(anchor);
     }
 
     /// Reset modifiers and emit a synthetic ModifiersChanged event if deemed necessary.
@@ -1259,8 +1327,30 @@ impl WinitView {
         });
     }
 
+    // After switching Spaces on macOS 26, fullscreen motion events near the
+    // top of the window can carry incorrect coordinates. Button events remain
+    // correct. Query through NSWindow/NSView instead of subtracting screen origins,
+    // so secondary displays and backing scales use AppKit's own conversion.
+    // See SDL's workaround: https://github.com/libsdl-org/SDL/issues/15967
+    fn fullscreen_mouse_position(&self) -> Option<LogicalPosition<f64>> {
+        static MACOS_MAJOR: OnceLock<isize> = OnceLock::new();
+        let major = *MACOS_MAJOR
+            .get_or_init(|| NSProcessInfo::processInfo().operatingSystemVersion().majorVersion);
+        let window = self.window();
+        let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
+        if !needs_live_fullscreen_motion(major, fullscreen) {
+            return None;
+        }
+        let point = self.convertPoint_fromView(window.mouseLocationOutsideOfEventStream(), None);
+        Some(LogicalPosition::new(point.x, point.y))
+    }
+
     fn mouse_motion(&self, event: &NSEvent) {
-        let view_point = self.mouse_view_point(event);
+        self.mouse_motion_at(event, None);
+    }
+
+    fn mouse_motion_at(&self, event: &NSEvent, live: Option<LogicalPosition<f64>>) {
+        let view_point = live.unwrap_or_else(|| self.mouse_view_point(event));
         let frame = self.frame();
 
         if view_point.x.is_sign_negative()
@@ -1290,6 +1380,25 @@ impl WinitView {
         let view_point = self.convertPoint_fromView(window_point, None);
 
         LogicalPosition::new(view_point.x, view_point.y)
+    }
+
+    fn compute_delete_surrounding_from_range(&self, range: NSRange) -> Option<(usize, usize)> {
+        if range.location == NSNotFound as NSUInteger {
+            return None;
+        }
+        let surrounding_text = self.ivars().surrounding_text.borrow().to_string();
+        let anchor_utf8 = utf16_to_utf8_offset(&surrounding_text, self.ivars().anchor_offset.get());
+        let cursor_utf8 = utf16_to_utf8_offset(&surrounding_text, self.ivars().cursor_offset.get());
+        let start_utf8 = utf16_to_utf8_offset(&surrounding_text, range.location);
+        let end_utf8 = utf16_to_utf8_offset(&surrounding_text, range.location + range.length);
+        let (left, right) = if anchor_utf8 < cursor_utf8 {
+            (anchor_utf8, cursor_utf8)
+        } else {
+            (cursor_utf8, anchor_utf8)
+        };
+        let before_bytes = left.saturating_sub(start_utf8);
+        let after_bytes = end_utf8.saturating_sub(right);
+        if before_bytes > 0 || after_bytes > 0 { Some((before_bytes, after_bytes)) } else { None }
     }
 }
 
@@ -1339,5 +1448,36 @@ fn replace_event(event: &NSEvent, option_as_alt: OptionAsAlt) -> Retained<NSEven
             .unwrap()
     } else {
         event.copy()
+    }
+}
+
+fn needs_live_fullscreen_motion(macos_major: isize, fullscreen: bool) -> bool {
+    macos_major >= 26 && fullscreen
+}
+
+fn pointer_inside(point: [f64; 2], size: [f64; 2]) -> bool {
+    point[0] >= 0.0 && point[1] >= 0.0 && point[0] < size[0] && point[1] < size[1]
+}
+
+#[cfg(test)]
+mod pointer_tests {
+    use super::*;
+
+    #[test]
+    fn live_motion_is_limited_to_affected_fullscreen_windows() {
+        assert!(needs_live_fullscreen_motion(26, true));
+        assert!(needs_live_fullscreen_motion(27, true));
+        assert!(!needs_live_fullscreen_motion(15, true));
+        assert!(!needs_live_fullscreen_motion(26, false));
+    }
+
+    #[test]
+    fn actual_outside_motion_does_not_suppress_exit() {
+        let size = [1920.0, 1080.0];
+        assert!(pointer_inside([142.6, 27.1], size));
+        assert!(!pointer_inside([-668.4, -1052.9], size));
+        for point in [[-0.01, 0.0], [0.0, -0.01], [1920.0, 30.0], [30.0, 1080.0], [f64::NAN, 0.0]] {
+            assert!(!pointer_inside(point, size));
+        }
     }
 }
