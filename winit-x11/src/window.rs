@@ -1823,6 +1823,20 @@ impl UnownedWindow {
     }
 
     #[inline]
+    pub fn set_override_redirect(&self, value: bool) {
+        let mut swa = xproto::ChangeWindowAttributesAux::new();
+        swa.override_redirect = Some(value as u32);
+        if let Err(err) = self
+            .xconn
+            .xcb_connection()
+            .change_window_attributes(self.xwindow, &swa)
+            .map(|cookie| cookie.ignore_error())
+        {
+            tracing::error!("failed to set override-redirect: {err}");
+        }
+    }
+
+    #[inline]
     pub fn set_cursor(&self, cursor: Cursor) {
         match cursor {
             Cursor::Icon(icon) => {

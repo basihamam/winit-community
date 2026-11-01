@@ -135,6 +135,9 @@ impl Window {
         // Non-resizable implies that the min and max sizes are set to the same value.
         window_state.set_resizable(attributes.resizable);
 
+        // Set initial visibility.
+        window_state.set_visible(attributes.visible);
+
         // Set startup mode.
         match attributes.fullscreen {
             Some(Fullscreen::Exclusive(..)) => {
@@ -340,11 +343,42 @@ impl CoreWindow for Window {
     }
 
     fn set_visible(&self, visible: bool) {
-        self.common.set_visible(visible);
+        if visible {
+            let Some(s) = self.common.state.upgrade() else { return };
+            let mut state = s.lock().unwrap();
+            if state.is_visible() {
+                return;
+            }
+            state.set_visible(true);
+            state.frame_callback_reset();
+            if state.is_unmapped() {
+                // Re-send xdg_toplevel state to trigger a configure cycle
+                let title = state.title().to_owned();
+                state.set_title(title);
+                drop(state);
+                self.window.wl_surface().commit();
+                return;
+            }
+            drop(state);
+            self.common.request_redraw();
+        } else {
+            {
+                let Some(s) = self.common.state.upgrade() else { return };
+                let mut state = s.lock().unwrap();
+                if !state.is_visible() {
+                    return;
+                }
+                state.set_visible(false);
+                state.set_unmapped();
+            }
+            self.window.wl_surface().attach(None, 0, 0);
+            self.window.wl_surface().commit();
+        }
     }
 
     fn is_visible(&self) -> Option<bool> {
-        self.common.is_visible()
+        let s = self.common.state.upgrade()?;
+        Some(s.lock().unwrap().is_visible())
     }
 
     fn set_resizable(&self, resizable: bool) {

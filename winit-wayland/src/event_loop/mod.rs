@@ -515,6 +515,16 @@ impl EventLoop {
                 let mut window =
                     state.windows.get_mut().get_mut(window_id).unwrap().lock().unwrap();
 
+                if !window.is_visible() {
+                    let window_requests = state.window_requests.get_mut();
+                    window_requests.get(window_id).unwrap().take_redraw_requested();
+                    return None;
+                }
+
+                if window.is_unmapped() {
+                    return None;
+                }
+
                 if window.frame_callback_state() == FrameCallbackState::Requested {
                     return None;
                 }

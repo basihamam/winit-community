@@ -177,6 +177,12 @@ pub struct WindowState {
     /// The underlying SCTK window.
     pub window: WindowType,
 
+    /// Whether the window is visible.
+    visible: bool,
+
+    /// Whether the surface was unmapped via null buffer and needs a configure cycle before the next buffer attach.
+    unmapped: bool,
+
     // NOTE: The spec says that destroying parent(`window` in our case), will unmap the
     // subsurfaces. Thus to achieve atomic unmap of the client, drop the decorations
     // frame after the `window` is dropped. To achieve that we rely on rust's struct
@@ -242,7 +248,7 @@ impl WindowState {
             has_pending_move: None,
             text_input_state: None,
             max_surface_size: None,
-            min_surface_size: MIN_WINDOW_SIZE,
+            min_surface_size: LogicalSize::new(0, 0),
             resize_increments: None,
             pointer_constraints,
             pointers: Default::default(),
@@ -262,6 +268,8 @@ impl WindowState {
             theme,
             title: String::default(),
             transparent: false,
+            visible: true,
+            unmapped: false,
             viewport,
             window,
             children: Default::default(),
@@ -271,6 +279,31 @@ impl WindowState {
 
     pub(crate) fn xdg_toplevel(&self) -> Option<&xdg_toplevel::XdgToplevel> {
         self.window.xdg_toplevel()
+    }
+
+    #[inline]
+    pub fn is_visible(&self) -> bool {
+        self.visible
+    }
+
+    #[inline]
+    pub fn set_visible(&mut self, visible: bool) {
+        self.visible = visible;
+    }
+
+    #[inline]
+    pub fn is_unmapped(&self) -> bool {
+        self.unmapped
+    }
+
+    #[inline]
+    pub fn set_unmapped(&mut self) {
+        self.unmapped = true;
+    }
+
+    #[inline]
+    pub fn clear_unmapped(&mut self) {
+        self.unmapped = false;
     }
 
     // HACK: Currently to get the data device to initiate a drag-and-drop, we iterate through all
@@ -385,13 +418,7 @@ impl WindowState {
         }
 
         self.resizable = resizable;
-        if resizable {
-            // Restore min/max sizes of the window.
-            self.reload_min_max_hints();
-        } else {
-            self.set_min_surface_size(Some(self.size));
-            self.set_max_surface_size(Some(self.size));
-        }
+        self.reload_min_max_hints();
 
         // Reload the state on the frame as well.
         if let Some(frame) = self.frame.as_mut() {
@@ -511,6 +538,8 @@ impl WindowState {
             // the redraw scheduling is done on the caller side.
             let _ = self.set_blur(true);
         }
+
+        self.reload_min_max_hints();
     }
 
     pub(crate) fn set_maximized(&self, maximized: bool) {
@@ -598,40 +627,16 @@ impl WindowState {
         self.set_max_surface_size(size.map(|size| size.to_logical(scale_factor)));
     }
 
-    /// Set maximum inner window size.
+    /// Set minimum inner window size.
     pub fn set_min_surface_size(&mut self, size: Option<LogicalSize<u32>>) {
-        let Some(xdg_toplevel) = self.window.xdg_toplevel() else { return };
-
-        // Ensure that the window has the right minimum size.
-        let mut size = size.unwrap_or(MIN_WINDOW_SIZE);
-        size.width = size.width.max(MIN_WINDOW_SIZE.width);
-        size.height = size.height.max(MIN_WINDOW_SIZE.height);
-
-        // Add the borders.
-        let size = self
-            .frame
-            .as_ref()
-            .map(|frame| frame.add_borders(size.width, size.height).into())
-            .unwrap_or(size);
-
-        self.min_surface_size = size;
-        xdg_toplevel.set_min_size(size.width as _, size.height as _);
+        self.min_surface_size = size.unwrap_or_default();
+        self.reload_min_max_hints();
     }
 
     /// Set maximum inner window size.
     pub fn set_max_surface_size(&mut self, size: Option<LogicalSize<u32>>) {
-        let Some(xdg_toplevel) = self.window.xdg_toplevel() else { return };
-
-        let size = size.map(|size| {
-            self.frame
-                .as_ref()
-                .map(|frame| frame.add_borders(size.width, size.height).into())
-                .unwrap_or(size)
-        });
-
         self.max_surface_size = size;
-        let size = size.unwrap_or_default();
-        xdg_toplevel.set_max_size(size.width as _, size.height as _);
+        self.reload_min_max_hints();
     }
 
     /// Set the CSD theme.
@@ -651,8 +656,31 @@ impl WindowState {
 
     /// Reload the hints for minimum and maximum sizes.
     pub fn reload_min_max_hints(&mut self) {
-        self.set_min_surface_size(Some(self.min_surface_size));
-        self.set_max_surface_size(self.max_surface_size);
+        let Some(xdg_toplevel) = self.window.xdg_toplevel() else { return };
+
+        let (mut min, max) = if self.resizable {
+            (self.min_surface_size, self.max_surface_size)
+        } else {
+            (self.stateless_size, Some(self.stateless_size))
+        };
+
+        // Ensure that the window has the right minimum size.
+        min.width = min.width.max(MIN_WINDOW_SIZE.width);
+        min.height = min.height.max(MIN_WINDOW_SIZE.height);
+
+        // Add the borders.
+        let add_borders = |size: LogicalSize<u32>| {
+            self.frame
+                .as_ref()
+                .map(|frame| frame.add_borders(size.width, size.height).into())
+                .unwrap_or(size)
+        };
+
+        let min = add_borders(min);
+        let max = max.map(add_borders).unwrap_or_default();
+
+        xdg_toplevel.set_min_size(min.width as _, min.height as _);
+        xdg_toplevel.set_max_size(max.width as _, max.height as _);
     }
 
     pub fn show_window_menu(&self, position: LogicalPosition<u32>) {

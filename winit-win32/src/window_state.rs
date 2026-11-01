@@ -76,6 +76,11 @@ pub(crate) struct WindowState {
     // Flag whether redraw was requested.
     pub redraw_requested: bool,
 
+    // Whether redraw requests must be re-armed after the current message-dispatch batch.
+    pub redraw_deferred: bool,
+
+    pub menu_loop_depth: u32,
+
     pub dragging: bool,
 
     pub skip_taskbar: bool,
@@ -226,6 +231,8 @@ impl WindowState {
             is_active: false,
             is_focused: false,
             redraw_requested: false,
+            redraw_deferred: false,
+            menu_loop_depth: 0,
 
             dragging: false,
 
@@ -416,7 +423,10 @@ impl WindowFlags {
             return;
         }
 
-        if new.contains(WindowFlags::VISIBLE) {
+        if new.contains(WindowFlags::VISIBLE)
+            && !new.contains(WindowFlags::MAXIMIZED)
+            && !new.contains(WindowFlags::MINIMIZED)
+        {
             let flag = if !self.contains(WindowFlags::MARKER_ACTIVATE) {
                 self.set(WindowFlags::MARKER_ACTIVATE, true);
                 SW_SHOWNOACTIVATE
@@ -451,7 +461,9 @@ impl WindowFlags {
             }
         }
 
-        if diff.contains(WindowFlags::MAXIMIZED) || new.contains(WindowFlags::MAXIMIZED) {
+        if new.contains(WindowFlags::VISIBLE)
+            && (diff.contains(WindowFlags::MAXIMIZED) || new.contains(WindowFlags::MAXIMIZED))
+        {
             unsafe {
                 ShowWindow(window, match new.contains(WindowFlags::MAXIMIZED) {
                     true => SW_MAXIMIZE,
@@ -461,7 +473,9 @@ impl WindowFlags {
         }
 
         // Minimize operations should execute after maximize for proper window animations
-        if diff.contains(WindowFlags::MINIMIZED) {
+        if new.contains(WindowFlags::VISIBLE)
+            && (diff.contains(WindowFlags::MINIMIZED) || new.contains(WindowFlags::MINIMIZED))
+        {
             unsafe {
                 ShowWindow(window, match new.contains(WindowFlags::MINIMIZED) {
                     true => SW_MINIMIZE,
