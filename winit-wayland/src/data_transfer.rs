@@ -169,19 +169,14 @@ impl MimeType {
         downcast.into_iter().chain(from_hint)
     }
 
-    // TODO: We should properly parse MIME types using `mime` or a similar crate.
     fn parse_charset(&self) -> Result<Charset, UnexpectedCharsetError<'_>> {
-        let Some((_, charset)) = self
-            .mime
-            .split_once(';')
-            .and_then(|(_essence, options)| options.split_once("charset="))
-        else {
-            return Ok(Default::default());
-        };
-
-        let charset = charset.split_once(',').map(|(first, _)| first).unwrap_or(charset).trim();
-
-        if charset == "utf-8" { Ok(Charset::Utf8) } else { Err(UnexpectedCharsetError(charset)) }
+        let parsed =
+            self.mime.parse::<mime::Mime>().map_err(|_| UnexpectedCharsetError(&self.mime))?;
+        match parsed.get_param(mime::CHARSET) {
+            None => Ok(Charset::Utf8),
+            Some(charset) if charset.as_str().eq_ignore_ascii_case("utf-8") => Ok(Charset::Utf8),
+            Some(_) => Err(UnexpectedCharsetError(&self.mime)),
+        }
     }
 
     fn parse(mime: String) -> Self {
@@ -189,9 +184,21 @@ impl MimeType {
             .iter()
             .find_map(|(haystack, hint)| (*haystack == &*mime).then_some(*hint))
             .or_else(|| {
-                if mime.starts_with("image/") {
+                let parsed = mime.parse::<mime::Mime>().ok()?;
+                let charset_ok = parsed
+                    .get_param(mime::CHARSET)
+                    .map_or(true, |charset| charset.as_str().eq_ignore_ascii_case("utf-8"));
+                if parsed.type_() == mime::TEXT && charset_ok {
+                    if parsed.subtype() == mime::PLAIN {
+                        Some(TypeHint::Plaintext)
+                    } else if parsed.subtype() == mime::HTML {
+                        Some(TypeHint::Html)
+                    } else {
+                        Some(TypeHint::Plaintext)
+                    }
+                } else if parsed.type_() == mime::IMAGE {
                     Some(TypeHint::Image { extension_hint: None })
-                } else if mime.starts_with("audio/") {
+                } else if parsed.type_() == mime::AUDIO {
                     Some(TypeHint::Audio { extension_hint: None })
                 } else {
                     None
@@ -1385,5 +1392,41 @@ impl PrimarySelectionSourceHandler for WinitState {
         self.data_transfer_state
             .send_primary_selection
             .take_if(|primary| primary.data_source.inner() == source);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mime_type_parse_utf8_variations() {
+        let variations = [
+            "text/plain",
+            "text/plain;charset=utf-8",
+            "text/plain; charset=UTF-8",
+            "text/plain; charset=\"utf-8\"",
+            "text/plain;format=flowed;charset=utf-8",
+        ];
+
+        for mime_str in variations {
+            let mime = MimeType::parse(mime_str.to_string());
+            assert_eq!(
+                mime.hint(),
+                Some(TypeHint::Plaintext),
+                "Failed to detect Plaintext hint for: {mime_str}"
+            );
+            assert!(
+                mime.parse_charset().is_ok(),
+                "Failed to parse charset for: {mime_str}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_mime_type_non_utf8_charset() {
+        let mime = MimeType::parse("text/plain;charset=iso-8859-1".to_string());
+        assert_eq!(mime.hint(), None);
+        assert!(mime.parse_charset().is_err());
     }
 }

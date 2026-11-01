@@ -33,7 +33,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::Input::Pointer::{
     POINTER_FLAG_CANCELED, POINTER_FLAG_DOWN, POINTER_FLAG_INCONTACT, POINTER_FLAG_PRIMARY,
-    POINTER_FLAG_UP, POINTER_FLAG_UPDATE,
+    POINTER_FLAG_UP, POINTER_FLAG_UPDATE, POINTER_PEN_INFO, POINTER_TOUCH_INFO,
 };
 use windows_sys::Win32::UI::Input::Touch::{
     CloseTouchInputHandle, GetTouchInputInfo, TOUCHEVENTF_DOWN, TOUCHEVENTF_MOVE,
@@ -2484,10 +2484,64 @@ unsafe fn public_window_callback_inner(
                 }
                 unsafe { pointer_infos.set_len(pointer_info_count) };
 
+                let pen_history: Option<Vec<POINTER_PEN_INFO>> = if util::GET_POINTER_FRAME_PEN_INFO_HISTORY.is_some()
+                    && pointer_infos.iter().any(|info| info.pointerType == PT_PEN)
+                {
+                    if let Some(GetPointerFramePenInfoHistory) = *util::GET_POINTER_FRAME_PEN_INFO_HISTORY {
+                        let mut pen_infos = Vec::with_capacity(pointer_info_count);
+                        let mut pen_entries = entries_count;
+                        let mut pen_pointers = pointers_count;
+                        if unsafe {
+                            GetPointerFramePenInfoHistory(
+                                pointer_id,
+                                &mut pen_entries,
+                                &mut pen_pointers,
+                                pen_infos.as_mut_ptr(),
+                            )
+                        } != false.into() {
+                            unsafe { pen_infos.set_len(pointer_info_count) };
+                            Some(pen_infos)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let touch_history: Option<Vec<POINTER_TOUCH_INFO>> = if util::GET_POINTER_FRAME_TOUCH_INFO_HISTORY.is_some()
+                    && pointer_infos.iter().any(|info| info.pointerType == PT_TOUCH)
+                {
+                    if let Some(GetPointerFrameTouchInfoHistory) = *util::GET_POINTER_FRAME_TOUCH_INFO_HISTORY {
+                        let mut touch_infos = Vec::with_capacity(pointer_info_count);
+                        let mut touch_entries = entries_count;
+                        let mut touch_pointers = pointers_count;
+                        if unsafe {
+                            GetPointerFrameTouchInfoHistory(
+                                pointer_id,
+                                &mut touch_entries,
+                                &mut touch_pointers,
+                                touch_infos.as_mut_ptr(),
+                            )
+                        } != false.into() {
+                            unsafe { touch_infos.set_len(pointer_info_count) };
+                            Some(touch_infos)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 // https://docs.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-getpointerframeinfohistory
                 // The information retrieved appears in reverse chronological order, with the most
                 // recent entry in the first row of the returned array
-                for pointer_info in pointer_infos.iter().rev() {
+                for (orig_idx, pointer_info) in pointer_infos.iter().enumerate().rev() {
                     let mut device_rect = mem::MaybeUninit::uninit();
                     let mut display_rect = mem::MaybeUninit::uninit();
 
@@ -2534,20 +2588,30 @@ unsafe fn public_window_callback_inner(
                     let finger_id = FingerId::from_raw(pointer_info.pointerId as usize);
                     let primary = util::has_flag(pointer_info.pointerFlags, POINTER_FLAG_PRIMARY);
 
+                    let touch_force = touch_history
+                        .as_ref()
+                        .and_then(|touches| touches.get(orig_idx))
+                        .and_then(|touch| normalize_pointer_pressure(touch.pressure))
+                        .or_else(|| force_for_touch(pointer_info.pointerId));
+
+                    let (pen_flags, pen_data) = pen_history
+                        .as_ref()
+                        .and_then(|pens| pens.get(orig_idx))
+                        .map(tablet_tool_info_from_pen_info)
+                        .unwrap_or_else(|| tablet_tool_info_for_pen(pointer_info.pointerId));
+
                     let flags = pointer_info.pointerFlags;
                     if util::has_flag(flags, POINTER_FLAG_DOWN) {
                         let (kind, pen_flags, button) = match pointer_info.pointerType {
                             PT_TOUCH => (PointerKind::Touch(finger_id), 0, ButtonSource::Touch {
                                 finger_id,
-                                force: force_for_touch(pointer_info.pointerId),
+                                force: touch_force,
                             }),
                             PT_PEN => {
-                                let (pen_flags, data) =
-                                    tablet_tool_info_for_pen(pointer_info.pointerId);
                                 let button = ButtonSource::TabletTool {
                                     kind: TabletToolKind::Pen,
                                     button: pen_flags_to_button(pen_flags),
-                                    data,
+                                    data: pen_data,
                                 };
                                 (PointerKind::TabletTool(TabletToolKind::Pen), pen_flags, button)
                             },
@@ -2592,15 +2656,13 @@ unsafe fn public_window_callback_inner(
                             let button = match pointer_info.pointerType {
                                 PT_TOUCH => ButtonSource::Touch {
                                     finger_id,
-                                    force: force_for_touch(pointer_info.pointerId),
+                                    force: touch_force,
                                 },
                                 PT_PEN => {
-                                    let (pen_flags, data) =
-                                        tablet_tool_info_for_pen(pointer_info.pointerId);
                                     ButtonSource::TabletTool {
                                         kind: TabletToolKind::Pen,
                                         button: pen_flags_to_button(pen_flags ^ contact.pen_flags),
-                                        data,
+                                        data: pen_data,
                                     }
                                 },
                                 _ => ButtonSource::Unknown(0),
@@ -2631,11 +2693,11 @@ unsafe fn public_window_callback_inner(
                         let source = match pointer_info.pointerType {
                             PT_TOUCH => PointerSource::Touch {
                                 finger_id,
-                                force: force_for_touch(pointer_info.pointerId),
+                                force: touch_force,
                             },
                             PT_PEN => PointerSource::TabletTool {
                                 kind: TabletToolKind::Pen,
-                                data: tablet_tool_info_for_pen(pointer_info.pointerId).1,
+                                data: pen_data,
                             },
                             _ => PointerSource::Unknown,
                         };
@@ -3206,34 +3268,36 @@ fn force_for_touch(pointer_id: u32) -> Option<Force> {
     })
 }
 
+fn tablet_tool_info_from_pen_info(pen_info: &POINTER_PEN_INFO) -> (u32, TabletToolData) {
+    let mut tool_data = TabletToolData::default();
+    if pen_info.penMask & PEN_MASK_PRESSURE != 0 {
+        tool_data.force = normalize_pointer_pressure(pen_info.pressure);
+    }
+    if pen_info.penMask & (PEN_MASK_TILT_X | PEN_MASK_TILT_Y) != 0 {
+        tool_data.tilt =
+            Some(TabletToolTilt { x: pen_info.tiltX as i8, y: pen_info.tiltY as i8 });
+    }
+    if pen_info.penMask & PEN_MASK_ROTATION != 0 {
+        tool_data.twist = Some(pen_info.rotation as u16);
+    }
+
+    (pen_info.penFlags, tool_data)
+}
+
 // Information is stored on the same thing, so we don't save anything by
 // splitting the functions.
 fn tablet_tool_info_for_pen(pointer_id: u32) -> (u32, TabletToolData) {
-    let mut tool_data = TabletToolData::default();
-    let mut tool_button = 0;
-
     let mut tablet_info = mem::MaybeUninit::uninit();
-    util::GET_POINTER_PEN_INFO.map(|GetPointerPenInfo| {
-        if unsafe { GetPointerPenInfo(pointer_id, tablet_info.as_mut_ptr()) } == 0 {
-            return;
-        }
-
-        let pen_info = unsafe { tablet_info.assume_init() };
-        if pen_info.penMask & PEN_MASK_PRESSURE != 0 {
-            tool_data.force = normalize_pointer_pressure(pen_info.pressure);
-        }
-        if pen_info.penMask & (PEN_MASK_TILT_X | PEN_MASK_TILT_Y) != 0 {
-            tool_data.tilt =
-                Some(TabletToolTilt { x: pen_info.tiltX as i8, y: pen_info.tiltY as i8 });
-        }
-        if pen_info.penMask & PEN_MASK_ROTATION != 0 {
-            tool_data.twist = Some(pen_info.rotation as u16);
-        }
-
-        tool_button = pen_info.penFlags;
-    });
-
-    (tool_button, tool_data)
+    util::GET_POINTER_PEN_INFO
+        .and_then(|GetPointerPenInfo| {
+            if unsafe { GetPointerPenInfo(pointer_id, tablet_info.as_mut_ptr()) } == 0 {
+                None
+            } else {
+                let pen_info = unsafe { tablet_info.assume_init() };
+                Some(tablet_tool_info_from_pen_info(&pen_info))
+            }
+        })
+        .unwrap_or_default()
 }
 
 // NOTE: According to firefox, the buttons while can be combined, in
@@ -3263,5 +3327,23 @@ mod tests {
         assert_eq!(inverted_wheel_delta(i16::MIN), 32768.0 / WHEEL_DELTA as f32);
         assert_eq!(inverted_wheel_delta(120), -1.0);
         assert_eq!(inverted_wheel_delta(-120), 1.0);
+    }
+
+    #[test]
+    fn test_tablet_tool_info_from_pen_info() {
+        let mut pen_info: POINTER_PEN_INFO = unsafe { mem::zeroed() };
+        pen_info.penMask =
+            PEN_MASK_PRESSURE | PEN_MASK_TILT_X | PEN_MASK_TILT_Y | PEN_MASK_ROTATION;
+        pen_info.pressure = 512;
+        pen_info.tiltX = 15;
+        pen_info.tiltY = -20;
+        pen_info.rotation = 180;
+        pen_info.penFlags = PEN_FLAG_BARREL;
+
+        let (flags, data) = tablet_tool_info_from_pen_info(&pen_info);
+        assert_eq!(flags, PEN_FLAG_BARREL);
+        assert_eq!(data.tilt, Some(TabletToolTilt { x: 15, y: -20 }));
+        assert_eq!(data.twist, Some(180));
+        assert!(data.force.is_some());
     }
 }

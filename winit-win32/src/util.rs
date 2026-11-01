@@ -277,6 +277,18 @@ pub type GetPointerTouchInfo =
     unsafe extern "system" fn(pointer_id: u32, touch_info: *mut POINTER_TOUCH_INFO) -> BOOL;
 pub type GetPointerPenInfo =
     unsafe extern "system" fn(pointer_id: u32, pen_info: *mut POINTER_PEN_INFO) -> BOOL;
+pub type GetPointerFramePenInfoHistory = unsafe extern "system" fn(
+    pointer_id: u32,
+    entries_count: *mut u32,
+    pointer_count: *mut u32,
+    pen_info: *mut POINTER_PEN_INFO,
+) -> BOOL;
+pub type GetPointerFrameTouchInfoHistory = unsafe extern "system" fn(
+    pointer_id: u32,
+    entries_count: *mut u32,
+    pointer_count: *mut u32,
+    touch_info: *mut POINTER_TOUCH_INFO,
+) -> BOOL;
 
 pub(crate) static WIN10_BUILD_VERSION: LazyLock<Option<u32>> = LazyLock::new(|| {
     type RtlGetVersion = unsafe extern "system" fn(*mut OSVERSIONINFOW) -> NTSTATUS;
@@ -331,6 +343,12 @@ pub(crate) static GET_POINTER_TOUCH_INFO: LazyLock<Option<GetPointerTouchInfo>> 
     LazyLock::new(|| get_function!("user32.dll", GetPointerTouchInfo));
 pub(crate) static GET_POINTER_PEN_INFO: LazyLock<Option<GetPointerPenInfo>> =
     LazyLock::new(|| get_function!("user32.dll", GetPointerPenInfo));
+pub(crate) static GET_POINTER_FRAME_PEN_INFO_HISTORY: LazyLock<
+    Option<GetPointerFramePenInfoHistory>,
+> = LazyLock::new(|| get_function!("user32.dll", GetPointerFramePenInfoHistory));
+pub(crate) static GET_POINTER_FRAME_TOUCH_INFO_HISTORY: LazyLock<
+    Option<GetPointerFrameTouchInfoHistory>,
+> = LazyLock::new(|| get_function!("user32.dll", GetPointerFrameTouchInfoHistory));
 
 pub(crate) fn wrap_device_id(id: u32) -> DeviceId {
     DeviceId::from_raw(id as i64)
