@@ -357,8 +357,8 @@ define_class!(
             &self,
             previous_trait_collection: Option<&UITraitCollection>,
         ) {
-            let style = self.traitCollection().userInterfaceStyle();
-            let prev_style = previous_trait_collection.map(|c| c.userInterfaceStyle());
+            let style = unsafe { self.traitCollection().userInterfaceStyle() };
+            let prev_style = previous_trait_collection.map(|c| unsafe { c.userInterfaceStyle() });
             if Some(style) != prev_style {
                 let theme = match style {
                     UIUserInterfaceStyle::Dark => Theme::Dark,

@@ -396,6 +396,25 @@ bitflags! {
         const ALT = 0b100 << 6;
         /// This is the "windows" key on PC and "command" key on Mac.
         const META = 0b100 << 9;
+        /// The "AltGraph" key, typically used to insert symbols on international layouts.
+        const ALT_GRAPH = 0b100 << 10;
+        /// The "Caps Lock" key.
+        const CAPS_LOCK = 0b100 << 11;
+        /// The "Num Lock" key.
+        const NUM_LOCK = 0b100 << 12;
+        /// The "Scroll Lock" key.
+        const SCROLL_LOCK = 0b100 << 13;
+        /// The "Function" switch key.
+        const FN = 0b100 << 14;
+        /// The "Function-Lock" key.
+        const FN_LOCK = 0b100 << 15;
+        /// The "Kana Mode" ("Kana Lock") key.
+        const KANA_LOCK = 0b100 << 16;
+        /// The "Symbol" modifier key.
+        const SYMBOL = 0b100 << 19;
+        /// The "Symbol" Lock key.
+        const SYMBOL_LOCK = 0b100 << 20;
+
         #[deprecated = "use META instead"]
         const SUPER = Self::META.bits();
     }
@@ -420,6 +439,26 @@ impl ModifiersState {
     /// Returns whether the meta modifier is active.
     pub fn meta_key(&self) -> bool {
         self.intersects(Self::META)
+    }
+
+    /// Returns whether the AltGraph modifier is active.
+    pub fn alt_graph_key(&self) -> bool {
+        self.intersects(Self::ALT_GRAPH)
+    }
+
+    /// Returns whether the CapsLock modifier is active.
+    pub fn caps_lock_key(&self) -> bool {
+        self.intersects(Self::CAPS_LOCK)
+    }
+
+    /// Returns whether the NumLock modifier is active.
+    pub fn num_lock_key(&self) -> bool {
+        self.intersects(Self::NUM_LOCK)
+    }
+
+    /// Returns whether the ScrollLock modifier is active.
+    pub fn scroll_lock_key(&self) -> bool {
+        self.intersects(Self::SCROLL_LOCK)
     }
 }
 

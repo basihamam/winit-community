@@ -1325,8 +1325,15 @@ unsafe fn gain_active_focus(window: HWND, userdata: &WindowData) {
 unsafe fn lose_active_focus(window: HWND, userdata: &WindowData) {
     use winit_core::event::WindowEvent::{Focused, ModifiersChanged};
 
-    userdata.window_state_lock().modifiers_state = ModifiersState::empty();
-    userdata.send_window_event(window, ModifiersChanged(ModifiersState::empty().into()));
+    let had_modifiers = {
+        let mut state = userdata.window_state_lock();
+        let had = !state.modifiers_state.is_empty();
+        state.modifiers_state = ModifiersState::empty();
+        had
+    };
+    if had_modifiers {
+        userdata.send_window_event(window, ModifiersChanged(ModifiersState::empty().into()));
+    }
 
     // Release the cursor clip, which Windows keeps active even after focus loss.
     userdata.window_state_lock().mouse.set_cursor_flags(window, |_| ()).ok();

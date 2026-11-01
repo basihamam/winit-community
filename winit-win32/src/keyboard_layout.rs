@@ -96,6 +96,10 @@ fn key_pressed(vkey: VIRTUAL_KEY) -> bool {
     unsafe { (GetKeyState(vkey as i32) & (1 << 15)) == (1 << 15) }
 }
 
+fn key_toggled(vkey: VIRTUAL_KEY) -> bool {
+    unsafe { (GetKeyState(vkey as i32) & 1) != 0 }
+}
+
 const NUMPAD_VKEYS: [VIRTUAL_KEY; 16] = [
     VK_NUMPAD0,
     VK_NUMPAD1,
@@ -318,12 +322,16 @@ impl LayoutCache {
 
     pub fn get_agnostic_mods(&mut self) -> ModifiersState {
         let (_, layout) = self.get_current_layout();
-        let filter_out_altgr = layout.has_alt_graph && key_pressed(VK_RMENU);
+        let is_altgr = layout.has_alt_graph && key_pressed(VK_RMENU);
         let mut mods = ModifiersState::empty();
         mods.set(ModifiersState::SHIFT, key_pressed(VK_SHIFT));
-        mods.set(ModifiersState::CONTROL, key_pressed(VK_CONTROL) && !filter_out_altgr);
-        mods.set(ModifiersState::ALT, key_pressed(VK_MENU) && !filter_out_altgr);
+        mods.set(ModifiersState::CONTROL, key_pressed(VK_CONTROL) && !is_altgr);
+        mods.set(ModifiersState::ALT, key_pressed(VK_MENU) && !is_altgr);
         mods.set(ModifiersState::META, key_pressed(VK_LWIN) || key_pressed(VK_RWIN));
+        mods.set(ModifiersState::ALT_GRAPH, is_altgr);
+        mods.set(ModifiersState::CAPS_LOCK, key_toggled(VK_CAPITAL));
+        mods.set(ModifiersState::NUM_LOCK, key_toggled(VK_NUMLOCK));
+        mods.set(ModifiersState::SCROLL_LOCK, key_toggled(VK_SCROLL));
         mods
     }
 

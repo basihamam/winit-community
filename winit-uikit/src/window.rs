@@ -14,7 +14,8 @@ use objc2_core_foundation::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSObject, NSObjectProtocol};
 use objc2_ui_kit::{
     UIApplication, UICoordinateSpace, UIEdgeInsets, UIResponder, UIScreen,
-    UIScreenOverscanCompensation, UIUserInterfaceStyle, UIViewController, UIWindow,
+    UIScreenOverscanCompensation, UITraitEnvironment, UIUserInterfaceStyle, UIViewController,
+    UIWindow, UIWindowScene,
 };
 use tracing::{debug, debug_span, warn};
 use winit_core::cursor::Cursor;
@@ -83,6 +84,17 @@ impl WinitUIWindow {
         let this: Retained<Self> = unsafe { msg_send![mtm.alloc(), initWithFrame: frame] };
 
         this.setRootViewController(Some(view_controller));
+
+        #[cfg(target_vendor = "apple")]
+        if this.windowScene().is_none() {
+            let scene = UIApplication::sharedApplication(mtm)
+                .connectedScenes()
+                .into_iter()
+                .find_map(|scene| scene.downcast::<UIWindowScene>().ok());
+            if let Some(scene) = scene {
+                this.setWindowScene(Some(&scene));
+            }
+        }
 
         match window_attributes.fullscreen.clone() {
             Some(Fullscreen::Exclusive(monitor, ref video_mode)) => {
@@ -454,7 +466,7 @@ impl Inner {
     }
 
     pub fn theme(&self) -> Option<Theme> {
-        let style = self.window.traitCollection().userInterfaceStyle();
+        let style = unsafe { self.window.traitCollection().userInterfaceStyle() };
         match style {
             UIUserInterfaceStyle::Dark => Some(Theme::Dark),
             UIUserInterfaceStyle::Light => Some(Theme::Light),

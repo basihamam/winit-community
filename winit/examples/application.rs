@@ -920,6 +920,13 @@ impl WindowState {
             return Ok(());
         }
 
+        let size = self.window.surface_size();
+        if let (Some(width), Some(height)) =
+            (std::num::NonZeroU32::new(size.width), std::num::NonZeroU32::new(size.height))
+        {
+            let _ = self.surface.resize(width, height);
+        }
+
         let mut buffer = self.surface.buffer_mut()?;
 
         if self.animated_fill_color {

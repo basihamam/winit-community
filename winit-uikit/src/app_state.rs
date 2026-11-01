@@ -83,6 +83,7 @@ pub(crate) struct AppState {
     event_loop_proxy: Arc<EventLoopProxy>,
     queued_events: Cell<Vec<EventWrapper>>,
     queued_gpu_redraws: Cell<HashSet<Retained<WinitUIWindow>>>,
+    awaiting_scene: Cell<bool>,
 }
 
 impl fmt::Debug for AppState {
@@ -116,6 +117,7 @@ impl AppState {
                 event_loop_proxy,
                 queued_events: Cell::new(Vec::new()),
                 queued_gpu_redraws: Cell::new(HashSet::new()),
+                awaiting_scene: Cell::new(false),
             })
             .is_ok()
     }
@@ -282,8 +284,25 @@ pub fn did_finish_launching(mtm: MainThreadMarker) {
     this.did_finish_launching_transition();
 
     get_handler(mtm).handle(|app| app.new_events(&ActiveEventLoop { mtm }, StartCause::Init));
+
+    #[cfg(target_vendor = "apple")]
+    if UIApplication::sharedApplication(mtm).connectedScenes().is_empty() {
+        this.awaiting_scene.set(true);
+    } else {
+        get_handler(mtm).handle(|app| app.can_create_surfaces(&ActiveEventLoop { mtm }));
+    }
+    #[cfg(not(target_vendor = "apple"))]
     get_handler(mtm).handle(|app| app.can_create_surfaces(&ActiveEventLoop { mtm }));
+
     handle_nonuser_events(mtm, []);
+}
+
+#[allow(dead_code)]
+pub(crate) fn scene_will_connect(mtm: MainThreadMarker) {
+    if AppState::get(mtm).awaiting_scene.replace(false) {
+        get_handler(mtm).handle(|app| app.can_create_surfaces(&ActiveEventLoop { mtm }));
+        handle_nonuser_events(mtm, []);
+    }
 }
 
 // AppState::did_finish_launching handles the special transition `Init`
