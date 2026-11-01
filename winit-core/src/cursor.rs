@@ -155,6 +155,16 @@ impl CustomCursorSource {
         CursorImage::from_rgba(rgba, width, height, hotspot_x, hotspot_y).map(Self::Image)
     }
 
+    /// Creates a new cursor from multiple resolutions / HiDPI representations.
+    pub fn from_rgba_representations(
+        representations: Vec<CursorImageRepresentation>,
+        hotspot_x: u16,
+        hotspot_y: u16,
+    ) -> Result<Self, BadImage> {
+        CursorImage::from_rgba_representations(representations, hotspot_x, hotspot_y)
+            .map(Self::Image)
+    }
+
     /// Crates a new animated cursor from multiple [`CustomCursor`]s
     /// Supplied `cursors` can't be empty or other animations.
     pub fn from_animation(
@@ -238,6 +248,15 @@ impl fmt::Display for BadAnimation {
 
 impl Error for BadAnimation {}
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CursorImageRepresentation {
+    pub rgba: Vec<u8>,
+    pub width: u16,
+    pub height: u16,
+    pub logical_width: u16,
+    pub logical_height: u16,
+}
+
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct CursorImage {
     pub(crate) rgba: Vec<u8>,
@@ -245,6 +264,7 @@ pub struct CursorImage {
     pub(crate) height: u16,
     pub(crate) hotspot_x: u16,
     pub(crate) hotspot_y: u16,
+    pub(crate) representations: Vec<CursorImageRepresentation>,
 }
 
 impl CursorImage {
@@ -278,7 +298,65 @@ impl CursorImage {
             return Err(BadImage::HotspotOutOfBounds { width, height, hotspot_x, hotspot_y });
         }
 
-        Ok(CursorImage { rgba, width, height, hotspot_x, hotspot_y })
+        let representations = vec![CursorImageRepresentation {
+            rgba: rgba.clone(),
+            width,
+            height,
+            logical_width: width,
+            logical_height: height,
+        }];
+
+        Ok(CursorImage { rgba, width, height, hotspot_x, hotspot_y, representations })
+    }
+
+    pub(crate) fn from_rgba_representations(
+        representations: Vec<CursorImageRepresentation>,
+        hotspot_x: u16,
+        hotspot_y: u16,
+    ) -> Result<Self, BadImage> {
+        if representations.is_empty() {
+            return Err(BadImage::ByteCountNotDivisibleBy4 { byte_count: 0 });
+        }
+
+        for rep in &representations {
+            if rep.width > MAX_CURSOR_SIZE || rep.height > MAX_CURSOR_SIZE {
+                return Err(BadImage::TooLarge { width: rep.width, height: rep.height });
+            }
+
+            if rep.rgba.len() % PIXEL_SIZE != 0 {
+                return Err(BadImage::ByteCountNotDivisibleBy4 { byte_count: rep.rgba.len() });
+            }
+
+            let pixel_count = (rep.rgba.len() / PIXEL_SIZE) as u64;
+            let width_x_height = rep.width as u64 * rep.height as u64;
+            if pixel_count != width_x_height {
+                return Err(BadImage::DimensionsVsPixelCount {
+                    width: rep.width,
+                    height: rep.height,
+                    width_x_height,
+                    pixel_count,
+                });
+            }
+        }
+
+        let primary = &representations[0];
+        if hotspot_x >= primary.logical_width || hotspot_y >= primary.logical_height {
+            return Err(BadImage::HotspotOutOfBounds {
+                width: primary.logical_width,
+                height: primary.logical_height,
+                hotspot_x,
+                hotspot_y,
+            });
+        }
+
+        Ok(CursorImage {
+            rgba: primary.rgba.clone(),
+            width: primary.width,
+            height: primary.height,
+            hotspot_x,
+            hotspot_y,
+            representations,
+        })
     }
 
     pub fn buffer(&self) -> &[u8] {
@@ -303,6 +381,10 @@ impl CursorImage {
 
     pub fn hotspot_y(&self) -> u16 {
         self.hotspot_y
+    }
+
+    pub fn representations(&self) -> &[CursorImageRepresentation] {
+        &self.representations
     }
 }
 

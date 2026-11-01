@@ -52,13 +52,14 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     RegisterClassExW, RegisterWindowMessageA, SC_MINIMIZE, SC_RESTORE, SIZE_MAXIMIZED,
     SPI_GETWHEELSCROLLCHARS, SPI_GETWHEELSCROLLLINES, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SetCursor, SetWindowPos, SystemParametersInfoW, TranslateMessage, WHEEL_DELTA,
-    WINDOWPOS, WM_CAPTURECHANGED, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_ENTERMENULOOP,
-    WM_ENTERSIZEMOVE, WM_EXITMENULOOP, WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION,
-    WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_INPUT, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP,
-    WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MENUCHAR,
-    WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCCREATE,
-    WM_NCDESTROY, WM_NCLBUTTONDOWN, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN,
-    WM_POINTERUP, WM_POINTERUPDATE, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS,
+    WINDOWPOS, WM_CAPTURECHANGED, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_ENDSESSION,
+    WM_ENTERMENULOOP, WM_ENTERSIZEMOVE, WM_EXITMENULOOP, WM_EXITSIZEMOVE, WM_GETMINMAXINFO,
+    WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION,
+    WM_INPUT, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MENUCHAR, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+    WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCCREATE, WM_NCDESTROY, WM_NCLBUTTONDOWN,
+    WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERUP, WM_POINTERUPDATE,
+    WM_QUERYENDSESSION, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS,
     WM_SETTINGCHANGE, WM_SIZE, WM_SIZING, WM_SYSCOMMAND, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TOUCH,
     WM_WINDOWPOSCHANGED, WM_WINDOWPOSCHANGING, WM_XBUTTONDOWN, WM_XBUTTONUP, WMSZ_BOTTOM,
     WMSZ_BOTTOMLEFT, WMSZ_BOTTOMRIGHT, WMSZ_LEFT, WMSZ_RIGHT, WMSZ_TOP, WMSZ_TOPLEFT,
@@ -1309,6 +1310,12 @@ unsafe fn gain_active_focus(window: HWND, userdata: &WindowData) {
 
     update_modifiers(window, userdata);
 
+    // Reapply exclusive video mode if returning from Alt+Tab
+    let fullscreen = userdata.window_state_lock().fullscreen.clone();
+    if let Some(winit_core::monitor::Fullscreen::Exclusive(ref monitor, ref video_mode)) = fullscreen {
+        crate::fullscreen::apply_exclusive_mode(monitor, video_mode);
+    }
+
     // Reapply the cursor clip released on focus loss.
     userdata.window_state_lock().mouse.set_cursor_flags(window, |_| ()).ok();
 
@@ -1574,9 +1581,25 @@ unsafe fn public_window_callback_inner(
             result = ProcResult::Value(0);
         },
 
+        WM_QUERYENDSESSION => {
+            result = ProcResult::DefWindowProc(wparam);
+        },
+
+        WM_ENDSESSION => {
+            if wparam != 0 {
+                userdata.event_loop_runner.loop_destroyed();
+                std::process::exit(0);
+            }
+            result = ProcResult::Value(0);
+        },
+
         WM_DESTROY => {
             use winit_core::event::WindowEvent::Destroyed;
             unsafe { RevokeDragDrop(window) };
+            let old_fullscreen = userdata.window_state_lock().fullscreen.take();
+            if let Some(winit_core::monitor::Fullscreen::Exclusive(ref monitor, _)) = old_fullscreen {
+                crate::fullscreen::restore_display_mode(Some(monitor));
+            }
             userdata.send_window_event(window, Destroyed);
             result = ProcResult::Value(0);
         },

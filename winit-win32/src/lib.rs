@@ -12,6 +12,7 @@ mod data_transfer;
 mod definitions;
 mod dpi;
 mod event_loop;
+mod fullscreen;
 mod icon;
 mod ime;
 mod keyboard;
@@ -38,6 +39,7 @@ use winit_core::window::{PlatformWindowAttributes, Window as CoreWindow};
 pub use self::event_loop::{EventLoop, PlatformSpecificEventLoopAttributes};
 use self::icon::{RaiiIcon, SelectedCursor};
 pub use self::keyboard::{physicalkey_to_scancode, scancode_to_physicalkey};
+pub use self::keyboard_layout::keycode_to_key;
 pub use self::monitor::{MonitorHandle, VideoModeHandle};
 pub use self::window::Window;
 

@@ -19,9 +19,7 @@ use windows_sys::Win32::Graphics::Dwm::{
     DwmEnableBlurBehindWindow, DwmSetWindowAttribute,
 };
 use windows_sys::Win32::Graphics::Gdi::{
-    CDS_FULLSCREEN, ChangeDisplaySettingsExW, CreateRectRgn, DISP_CHANGE_BADFLAGS,
-    DISP_CHANGE_BADMODE, DISP_CHANGE_BADPARAM, DISP_CHANGE_FAILED, DISP_CHANGE_SUCCESSFUL,
-    DeleteObject, InvalidateRgn, RDW_INTERNALPAINT, RedrawWindow,
+    CreateRectRgn, DeleteObject, InvalidateRgn, RDW_INTERNALPAINT, RedrawWindow,
 };
 use windows_sys::Win32::System::Com::{
     CLSCTX_ALL, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
@@ -37,9 +35,10 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, EnableMenuItem, FLASHW_ALL,
     FLASHW_STOP, FLASHW_TIMERNOFG, FLASHW_TRAY, FLASHWINFO, FlashWindowEx, GWLP_HINSTANCE,
     GetClientRect, GetCursorPos, GetForegroundWindow, GetSystemMenu, GetSystemMetrics,
-    GetWindowPlacement, GetWindowTextLengthW, GetWindowTextW, HTBOTTOM, HTBOTTOMLEFT,
-    HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, IsWindowVisible,
-    LoadCursorW, MENU_ITEM_STATE, MF_BYCOMMAND, MFS_DISABLED, MFS_ENABLED, NID_READY, PM_NOREMOVE,
+    GetWindowPlacement, GetWindowTextLengthW, GetWindowTextW, HICON, HTBOTTOM, HTBOTTOMLEFT,
+    HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, IDI_APPLICATION,
+    IMAGE_ICON, IsWindowVisible, LR_DEFAULTSIZE, LR_SHARED, LoadCursorW, LoadImageW,
+    MENU_ITEM_STATE, MF_BYCOMMAND, MFS_DISABLED, MFS_ENABLED, NID_READY, PM_NOREMOVE,
     PeekMessageW, PostMessageW, RegisterClassExW, SC_CLOSE, SC_MAXIMIZE, SC_MINIMIZE, SC_MOVE,
     SC_RESTORE, SC_SIZE, SM_DIGITIZER, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOSIZE,
     SWP_NOZORDER, SendMessageW, SetCursor, SetCursorPos, SetForegroundWindow, SetMenuDefaultItem,
@@ -72,7 +71,7 @@ use crate::monitor::MonitorHandle;
 use crate::window_state::{CursorFlags, SavedWindow, WindowFlags, WindowState};
 use crate::{
     BackdropType, Color, CornerPreference, SelectedCursor, WinIcon, WindowAttributesWindows,
-    monitor, util,
+    fullscreen, monitor, util,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -888,73 +887,38 @@ impl CoreWindow for Window {
         let window = self.window;
         let window_state = Arc::clone(&self.window_state);
 
-        let mut window_state_lock = window_state.lock().unwrap();
-        let old_fullscreen = window_state_lock.fullscreen.clone();
+        let old_fullscreen = {
+            let window_state_lock = window_state.lock().unwrap();
+            let old_fullscreen = window_state_lock.fullscreen.clone();
 
-        match (&old_fullscreen, &fullscreen) {
-            // Return if we already are in the same fullscreen mode
-            _ if old_fullscreen == fullscreen => return,
-            // Return if saved Borderless(monitor) is the same as current monitor when requested
-            // fullscreen is Borderless(None)
-            (Some(Fullscreen::Borderless(Some(monitor))), Some(Fullscreen::Borderless(None)))
-                if monitor.native_id() == monitor::current_monitor(window.hwnd()).native_id() =>
-            {
-                return;
-            },
-            _ => {},
-        }
-
-        window_state_lock.fullscreen.clone_from(&fullscreen);
-        drop(window_state_lock);
+            match (&old_fullscreen, &fullscreen) {
+                // Return if we already are in the same fullscreen mode
+                _ if old_fullscreen == fullscreen => return,
+                // Return if saved Borderless(monitor) is the same as current monitor when requested
+                // fullscreen is Borderless(None)
+                (Some(Fullscreen::Borderless(Some(monitor))), Some(Fullscreen::Borderless(None)))
+                    if monitor.native_id() == monitor::current_monitor(window.hwnd()).native_id() =>
+                {
+                    return;
+                },
+                _ => {},
+            }
+            old_fullscreen
+        };
 
         self.thread_executor.execute_in_thread(move || {
             let _ = &window;
-            // Change video mode if we're transitioning to or from exclusive
-            // fullscreen
-            match (&old_fullscreen, &fullscreen) {
-                (_, Some(Fullscreen::Exclusive(monitor, video_mode))) => {
-                    let monitor = monitor.cast_ref::<MonitorHandle>().unwrap();
-                    let video_mode =
-                        match monitor.video_mode_handles().find(|mode| &mode.mode == video_mode) {
-                            Some(monitor) => monitor,
-                            None => return,
-                        };
-                    let monitor_info = monitor::get_monitor_info(monitor.native_id() as _).unwrap();
 
-                    let res = unsafe {
-                        ChangeDisplaySettingsExW(
-                            monitor_info.szDevice.as_ptr(),
-                            &*video_mode.native_video_mode,
-                            ptr::null_mut(),
-                            CDS_FULLSCREEN,
-                            ptr::null(),
-                        )
-                    };
+            // Change video mode if we're transitioning to or from exclusive fullscreen
+            if fullscreen::transition_fullscreen(&old_fullscreen, &fullscreen).is_err() {
+                tracing::warn!("Failed to enter exclusive fullscreen, falling back gracefully");
+                return;
+            }
 
-                    debug_assert!(res != DISP_CHANGE_BADFLAGS);
-                    debug_assert!(res != DISP_CHANGE_BADMODE);
-                    debug_assert!(res != DISP_CHANGE_BADPARAM);
-                    debug_assert!(res != DISP_CHANGE_FAILED);
-                    assert_eq!(res, DISP_CHANGE_SUCCESSFUL);
-                },
-                (Some(Fullscreen::Exclusive(..)), _) => {
-                    let res = unsafe {
-                        ChangeDisplaySettingsExW(
-                            ptr::null(),
-                            ptr::null(),
-                            ptr::null_mut(),
-                            CDS_FULLSCREEN,
-                            ptr::null(),
-                        )
-                    };
-
-                    debug_assert!(res != DISP_CHANGE_BADFLAGS);
-                    debug_assert!(res != DISP_CHANGE_BADMODE);
-                    debug_assert!(res != DISP_CHANGE_BADPARAM);
-                    debug_assert!(res != DISP_CHANGE_FAILED);
-                    assert_eq!(res, DISP_CHANGE_SUCCESSFUL);
-                },
-                _ => (),
+            // Commit the state only after the display mode transition succeeds
+            {
+                let mut window_state_lock = window_state.lock().unwrap();
+                window_state_lock.fullscreen.clone_from(&fullscreen);
             }
 
             unsafe {
@@ -1733,19 +1697,36 @@ unsafe fn init(
 }
 
 unsafe fn register_window_class(class_name: &[u16]) {
+    let hinstance = util::get_instance_handle();
+
+    let hicon = unsafe {
+        LoadImageW(
+            hinstance,
+            IDI_APPLICATION,
+            IMAGE_ICON,
+            0,
+            0,
+            LR_DEFAULTSIZE | LR_SHARED,
+        ) as HICON
+    };
+
+    let hicon_sm = unsafe {
+        LoadImageW(hinstance, IDI_APPLICATION, IMAGE_ICON, 16, 16, LR_SHARED) as HICON
+    };
+
     let class = WNDCLASSEXW {
         cbSize: mem::size_of::<WNDCLASSEXW>() as u32,
         style: CS_HREDRAW | CS_VREDRAW,
         lpfnWndProc: Some(super::event_loop::public_window_callback),
         cbClsExtra: 0,
         cbWndExtra: 0,
-        hInstance: util::get_instance_handle(),
-        hIcon: ptr::null_mut(),
+        hInstance: hinstance,
+        hIcon: hicon,
         hCursor: ptr::null_mut(), // must be null in order for cursor state to work properly
         hbrBackground: ptr::null_mut(),
         lpszMenuName: ptr::null(),
         lpszClassName: class_name.as_ptr(),
-        hIconSm: ptr::null_mut(),
+        hIconSm: hicon_sm,
     };
 
     // We ignore errors because registering the same window class twice would trigger
