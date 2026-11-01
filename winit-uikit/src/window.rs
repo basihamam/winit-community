@@ -14,7 +14,7 @@ use objc2_core_foundation::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSObject, NSObjectProtocol};
 use objc2_ui_kit::{
     UIApplication, UICoordinateSpace, UIEdgeInsets, UIResponder, UIScreen,
-    UIScreenOverscanCompensation, UIViewController, UIWindow,
+    UIScreenOverscanCompensation, UIUserInterfaceStyle, UIViewController, UIWindow,
 };
 use tracing::{debug, debug_span, warn};
 use winit_core::cursor::Cursor;
@@ -454,8 +454,12 @@ impl Inner {
     }
 
     pub fn theme(&self) -> Option<Theme> {
-        warn!("`Window::theme` is ignored on iOS");
-        None
+        let style = self.window.traitCollection().userInterfaceStyle();
+        match style {
+            UIUserInterfaceStyle::Dark => Some(Theme::Dark),
+            UIUserInterfaceStyle::Light => Some(Theme::Light),
+            _ => None,
+        }
     }
 
     pub fn set_content_protected(&self, _protected: bool) {}
@@ -465,8 +469,13 @@ impl Inner {
     }
 
     #[inline]
-    pub fn set_theme(&self, _theme: Option<Theme>) {
-        warn!("`Window::set_theme` is ignored on iOS");
+    pub fn set_theme(&self, theme: Option<Theme>) {
+        let style = match theme {
+            Some(Theme::Dark) => UIUserInterfaceStyle::Dark,
+            Some(Theme::Light) => UIUserInterfaceStyle::Light,
+            None => UIUserInterfaceStyle::Unspecified,
+        };
+        self.window.setOverrideUserInterfaceStyle(style);
     }
 
     pub fn title(&self) -> String {

@@ -53,6 +53,7 @@ objc2-ui-kit = { workspace = true, features = [
     "UIEvent",
     "UIGeometry",
     "UIGestureRecognizer",
+    "UIInterface",
     "UITextInput",
     "UITextInputTraits",
     "UIOrientation",

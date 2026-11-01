@@ -987,6 +987,7 @@ impl CoreWindow for Window {
                     let position: (i32, i32) = monitor.position().unwrap_or_default().into();
                     let size: (u32, u32) = monitor.size().into();
 
+                    window_state.lock().unwrap().currently_repositioning = true;
                     unsafe {
                         SetWindowPos(
                             window.hwnd(),
@@ -999,6 +1000,7 @@ impl CoreWindow for Window {
                         );
                         InvalidateRgn(window.hwnd(), ptr::null_mut(), false.into());
                     }
+                    window_state.lock().unwrap().currently_repositioning = false;
                 },
                 None => {
                     // Restore the windowed bounds in a later message, not in this one, which

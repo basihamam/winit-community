@@ -244,6 +244,11 @@ impl PointerHandler {
                     return;
                 }
 
+                // Touch movements are processed via TouchEvent for multi-touch support
+                if matches!(kind, PointerKind::Touch(_)) {
+                    return;
+                }
+
                 // pointer move event
                 let scale = super::scale_factor(&window);
 

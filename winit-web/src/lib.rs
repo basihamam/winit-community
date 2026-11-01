@@ -40,6 +40,24 @@
 //! [`WindowEvent::PointerEntered`]: crate::event::WindowEvent::PointerEntered
 //! [`WindowEvent::PointerLeft`]: crate::event::WindowEvent::PointerLeft
 //! [`Window::set_outer_position()`]: crate::window::Window::set_outer_position
+//!
+//! ## Canvas Sizing and Avoiding Resize Loops
+//!
+//! A HTML5 `<canvas>` element maintains two separate sizes:
+//! 1. **CSS Layout Size**: Determined by CSS styling (`style.width` and `style.height` or layout rules).
+//! 2. **Drawing Buffer Size**: The internal pixel buffer (`canvas.width` and `canvas.height`) used for rendering.
+//!
+//! When configuring a window on the Web, you should define an explicit logical size for the window
+//! (e.g. using `WindowAttributes::with_surface_size` with [`dpi::LogicalSize`]), or style the canvas
+//! with explicit CSS dimensions (like `width: 100%; height: 100%`).
+//!
+//! If the canvas lacks an independent CSS size, the browser uses the drawing buffer size as the CSS layout size.
+//! On High-DPI displays where the device pixel ratio is greater than 1 (e.g., Retina screens),
+//! responding to a [`WindowEvent::SurfaceResized`] event by updating the drawing buffer will cause the CSS
+//! size to grow, which triggers another resize event. This creates an infinite resize loop that can freeze the page.
+//!
+//! Specifying an explicit logical surface size or using CSS styles decouples the layout size from the
+//! drawing buffer resolution and prevents resize feedback loops.
 
 #![warn(clippy::exhaustive_enums)]
 

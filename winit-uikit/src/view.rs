@@ -11,7 +11,7 @@ use objc2_ui_kit::{
     UIEvent, UIForceTouchCapability, UIGestureRecognizer, UIGestureRecognizerDelegate,
     UIGestureRecognizerState, UIKeyInput, UIPanGestureRecognizer, UIPinchGestureRecognizer,
     UIResponder, UIRotationGestureRecognizer, UITapGestureRecognizer, UITextInputTraits, UITouch,
-    UITouchPhase, UITouchType, UITraitEnvironment, UIView,
+    UITouchPhase, UITouchType, UITraitCollection, UITraitEnvironment, UIUserInterfaceStyle, UIView,
 };
 use tracing::{debug, debug_span, trace_span};
 use winit_core::event::{
@@ -19,6 +19,7 @@ use winit_core::event::{
     TabletToolAngle, TabletToolButton, TabletToolData, TabletToolKind, TouchPhase, WindowEvent,
 };
 use winit_core::keyboard::{Key, KeyCode, KeyLocation, NamedKey, NativeKeyCode, PhysicalKey};
+use winit_core::window::Theme;
 
 use super::app_state::{self, EventWrapper};
 use super::window::WinitUIWindow;
@@ -349,6 +350,32 @@ define_class!(
         fn delete_backward(&self) {
             let _entered = debug_span!("deleteBackward").entered();
             self.handle_delete_backward()
+        }
+
+        #[unsafe(method(traitCollectionDidChange:))]
+        fn trait_collection_did_change(
+            &self,
+            previous_trait_collection: Option<&UITraitCollection>,
+        ) {
+            let style = self.traitCollection().userInterfaceStyle();
+            let prev_style = previous_trait_collection.map(|c| c.userInterfaceStyle());
+            if Some(style) != prev_style {
+                let theme = match style {
+                    UIUserInterfaceStyle::Dark => Theme::Dark,
+                    UIUserInterfaceStyle::Light => Theme::Light,
+                    _ => return,
+                };
+                if let Some(window) = self.window() {
+                    let mtm = MainThreadMarker::new().unwrap();
+                    app_state::handle_nonuser_event(
+                        mtm,
+                        EventWrapper::Window {
+                            window_id: window.id(),
+                            event: WindowEvent::ThemeChanged(theme),
+                        },
+                    );
+                }
+            }
         }
     }
 );

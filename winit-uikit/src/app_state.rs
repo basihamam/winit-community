@@ -176,6 +176,13 @@ impl AppState {
         self.state.set(AppStateImpl::ProcessingRedraws { active_control_flow });
     }
 
+    fn has_queued_gpu_redraws(&self) -> bool {
+        let queued = self.queued_gpu_redraws.take();
+        let has = !queued.is_empty();
+        self.queued_gpu_redraws.set(queued);
+        has
+    }
+
     fn events_cleared_transition(&self) {
         if !self.has_launched() || self.has_terminated() {
             return;
@@ -185,33 +192,40 @@ impl AppState {
             s => bug!("unexpected state {:?}", s),
         };
 
+        let has_queued_gpu_redraws = self.has_queued_gpu_redraws();
         let new = self.control_flow.get();
         match (old, new) {
-            (ControlFlow::Wait, ControlFlow::Wait) => {
+            (ControlFlow::Wait, ControlFlow::Wait) | (_, ControlFlow::Wait) => {
                 let start = Instant::now();
                 self.state.set(AppStateImpl::Waiting { start });
-                self.waker.stop()
+                if has_queued_gpu_redraws {
+                    self.waker.start();
+                } else {
+                    self.waker.stop();
+                }
             },
             (ControlFlow::WaitUntil(old_instant), ControlFlow::WaitUntil(new_instant))
                 if old_instant == new_instant =>
             {
                 let start = Instant::now();
                 self.state.set(AppStateImpl::Waiting { start });
-            },
-            (_, ControlFlow::Wait) => {
-                let start = Instant::now();
-                self.state.set(AppStateImpl::Waiting { start });
-                self.waker.stop()
+                if has_queued_gpu_redraws {
+                    self.waker.start();
+                }
             },
             (_, ControlFlow::WaitUntil(new_instant)) => {
                 let start = Instant::now();
                 self.state.set(AppStateImpl::Waiting { start });
-                self.waker.start_at(new_instant)
+                if has_queued_gpu_redraws {
+                    self.waker.start();
+                } else {
+                    self.waker.start_at(new_instant);
+                }
             },
             // Unlike on macOS, handle Poll to Poll transition here to call the waker
             (_, ControlFlow::Poll) => {
                 self.state.set(AppStateImpl::PollFinished);
-                self.waker.start()
+                self.waker.start();
             },
         }
     }
@@ -489,14 +503,14 @@ impl Drop for EventLoopWaker {
 impl EventLoopWaker {
     fn new(rl: CFRetained<CFRunLoop>) -> EventLoopWaker {
         extern "C-unwind" fn wakeup_main_loop(_timer: *mut CFRunLoopTimer, _info: *mut c_void) {}
+        // CoreFoundation can stall in a tight catch-up loop for repeating timers with tiny intervals
+        // after the app resumes from being frozen in the background. Using f64::MAX disables periodic
+        // repeats and eliminates the catch-up loop while keeping the timer valid for manual rescheduling.
         unsafe {
-            // Create a timer with a 0.1µs interval (1ns does not work) to mimic polling.
-            // It is initially setup with a first fire time really far into the
-            // future, but that gets changed to fire immediately in did_finish_launching
             let timer = CFRunLoopTimer::new(
                 None,
                 f64::MAX,
-                0.000_000_1,
+                f64::MAX,
                 0,
                 0,
                 Some(wakeup_main_loop),

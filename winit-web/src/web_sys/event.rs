@@ -6,7 +6,9 @@ use smol_str::SmolStr;
 use tracing::warn;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{Event, KeyboardEvent, MouseEvent, Navigator, PointerEvent, WheelEvent};
+use web_sys::{
+    Event, HtmlCanvasElement, KeyboardEvent, MouseEvent, Navigator, PointerEvent, Touch, WheelEvent,
+};
 use winit_core::event::{
     ButtonSource, FingerId, Force, MouseButton, MouseScrollDelta, PointerKind, PointerSource,
     TabletToolAngle, TabletToolButton, TabletToolData, TabletToolKind, TabletToolTilt,
@@ -172,6 +174,11 @@ pub fn pointer_position(event: &MouseEvent) -> LogicalPosition<f64> {
     let event: &MouseEventExt = event.unchecked_ref();
 
     LogicalPosition { x: event.offset_x(), y: event.offset_y() }
+}
+
+pub fn touch_position(touch: &Touch, canvas: &HtmlCanvasElement) -> LogicalPosition<f64> {
+    let rect = canvas.get_bounding_client_rect();
+    LogicalPosition::new(touch.client_x() as f64 - rect.left(), touch.client_y() as f64 - rect.top())
 }
 
 // TODO: Remove this when Firefox supports correct movement values in coalesced events and browsers

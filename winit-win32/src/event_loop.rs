@@ -2919,17 +2919,19 @@ unsafe fn public_window_callback_inner(
                 suggested_rect
             };
 
-            unsafe {
-                SetWindowPos(
-                    window,
-                    ptr::null_mut(),
-                    new_outer_rect.left,
-                    new_outer_rect.top,
-                    new_outer_rect.right - new_outer_rect.left,
-                    new_outer_rect.bottom - new_outer_rect.top,
-                    SWP_NOZORDER | SWP_NOACTIVATE,
-                )
-            };
+            if !userdata.window_state_lock().currently_repositioning {
+                unsafe {
+                    SetWindowPos(
+                        window,
+                        ptr::null_mut(),
+                        new_outer_rect.left,
+                        new_outer_rect.top,
+                        new_outer_rect.right - new_outer_rect.left,
+                        new_outer_rect.bottom - new_outer_rect.top,
+                        SWP_NOZORDER | SWP_NOACTIVATE,
+                    )
+                };
+            }
 
             result = ProcResult::Value(0);
         },

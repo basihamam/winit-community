@@ -9,12 +9,12 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use web_sys::{
     CssStyleDeclaration, Document, Event, FocusEvent, HtmlCanvasElement, KeyboardEvent, Navigator,
-    PointerEvent, WheelEvent,
+    PointerEvent, TouchEvent, WheelEvent,
 };
 use winit_core::error::CreateWindowError;
 use winit_core::event::{
-    ButtonSource, DeviceId, ElementState, MouseScrollDelta, PointerKind, PointerSource,
-    SurfaceSizeWriter, WindowEvent,
+    ButtonSource, DeviceId, ElementState, FingerId, Force, MouseScrollDelta, PointerKind,
+    PointerSource, SurfaceSizeWriter, WindowEvent,
 };
 use winit_core::keyboard::{Key, KeyLocation, ModifiersState, PhysicalKey};
 use winit_core::monitor::Fullscreen;
@@ -46,6 +46,7 @@ pub struct Canvas {
 struct Handlers {
     animation_frame_handler: AnimationFrameHandler,
     on_touch_start: Option<EventListenerHandle<dyn FnMut(Event)>>,
+    on_touch_move: Option<EventListenerHandle<dyn FnMut(TouchEvent)>>,
     on_focus: Option<EventListenerHandle<dyn FnMut(FocusEvent)>>,
     on_blur: Option<EventListenerHandle<dyn FnMut(FocusEvent)>>,
     on_keyboard_release: Option<EventListenerHandle<dyn FnMut(KeyboardEvent)>>,
@@ -174,6 +175,7 @@ impl Canvas {
             handlers: RefCell::new(Handlers {
                 animation_frame_handler: AnimationFrameHandler::new(window),
                 on_touch_start: None,
+                on_touch_move: None,
                 on_blur: None,
                 on_focus: None,
                 on_keyboard_release: None,
@@ -262,6 +264,39 @@ impl Canvas {
                 if prevent_default.get() {
                     event.prevent_default();
                 }
+            }));
+    }
+
+    pub fn on_touch_move<F>(&self, mut handler: F)
+    where
+        F: 'static + FnMut(Option<DeviceId>, Vec<(PhysicalPosition<f64>, PointerSource)>),
+    {
+        let window = self.common.window.clone();
+        let canvas = self.common.raw.clone();
+        let prevent_default = Rc::clone(&self.prevent_default);
+        self.handlers.borrow_mut().on_touch_move =
+            Some(self.common.add_event("touchmove", move |event: TouchEvent| {
+                if prevent_default.get() {
+                    event.prevent_default();
+                    let _ = canvas.focus();
+                }
+
+                let touches = event.changed_touches();
+                let len = touches.length();
+                let scale = super::scale_factor(&window);
+                let mut events = Vec::with_capacity(len as usize);
+
+                for i in 0..len {
+                    if let Some(touch) = touches.get(i) {
+                        let finger_id = FingerId::from_raw(touch.identifier() as usize);
+                        let force = Force::Normalized(touch.force() as f64);
+                        let source = PointerSource::Touch { finger_id, force: Some(force) };
+                        let position = event::touch_position(&touch, &canvas).to_physical(scale);
+                        events.push((position, source));
+                    }
+                }
+
+                handler(None, events);
             }));
     }
 
@@ -531,6 +566,7 @@ impl Canvas {
     pub fn remove_listeners(&self) {
         let mut handlers = self.handlers.borrow_mut();
         handlers.on_touch_start.take();
+        handlers.on_touch_move.take();
         handlers.on_focus.take();
         handlers.on_blur.take();
         handlers.on_keyboard_release.take();
