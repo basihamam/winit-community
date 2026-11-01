@@ -42,6 +42,12 @@ changelog entry.
 
 ### Fixed
 
+- On Windows, release the cursor clip when the window loses focus and reapply it on focus gain.
+- On Windows, preserve requested decorations and normal activation behavior for ordinary owned windows, such as dialogs.
+- On Windows, fix the IME preedit cursor appearing before the composition with IMEs such as the Microsoft Korean IME that report neither a cursor position (`GCS_CURSORPOS`) nor a target clause; it is now placed at the end.
+- On Windows, emit `WindowEvent::SurfaceResized` from `WM_NCCALCSIZE` instead of `WM_SIZE`. The compositor shows a frame presented from this event together with the new window rectangle, which allows flicker-free live resizing; frames presented later are shown stretched for a moment.
+- On Windows, keep a transparent window transparent after leaving fullscreen. The windowed position and size are now restored in a later message.
+- On macOS, only close windows created by Winit when the event loop exits. Closing every window of the application also closed the window behind an `NSStatusItem`, which left the menu bar item unable to receive clicks after `run_app_on_demand` returned.
 - On Windows, fix a deadlock when IME is disabled during an active composition. The input
   method sends `WM_IME_ENDCOMPOSITION` synchronously, and its handler waited on the window
   state lock that `request_ime_update` was still holding.

@@ -36,7 +36,7 @@ use windows_sys::Win32::UI::Input::Touch::{RegisterTouchWindow, TWF_WANTPALM};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, EnableMenuItem, FLASHW_ALL,
     FLASHW_STOP, FLASHW_TIMERNOFG, FLASHW_TRAY, FLASHWINFO, FlashWindowEx, GWLP_HINSTANCE,
-    GetClientRect, GetCursorPos, GetForegroundWindow, GetParent, GetSystemMenu, GetSystemMetrics,
+    GetClientRect, GetCursorPos, GetForegroundWindow, GetSystemMenu, GetSystemMetrics,
     GetWindowPlacement, GetWindowTextLengthW, GetWindowTextW, HTBOTTOM, HTBOTTOMLEFT,
     HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, IsWindowVisible,
     LoadCursorW, MENU_ITEM_STATE, MF_BYCOMMAND, MFS_DISABLED, MFS_ENABLED, NID_READY, PM_NOREMOVE,
@@ -121,6 +121,17 @@ impl Window {
         self.window_state.lock().unwrap()
     }
 
+    /// Applies a windowed placement that leaving fullscreen left for a later message, so that it
+    /// does not undo a change of position, size or show state requested after it.
+    fn apply_pending_windowed_placement(&self) {
+        let window = self.window;
+        let window_state = Arc::clone(&self.window_state);
+        self.thread_executor.execute_in_thread(move || {
+            let _ = &window;
+            restore_windowed_placement(window.hwnd(), &window_state);
+        });
+    }
+
     // If the window is anchored the position is relative to the parent window and not
     // relative to the screen. Therefore we have to translate it from the parent
     // coordinate system to the display coordinate system
@@ -142,7 +153,7 @@ impl Window {
         if window_flags.contains(WindowFlags::ANCHORED)
             && !window_flags.contains(WindowFlags::CHILD)
         {
-            let parent = unsafe { GetParent(self.hwnd()) };
+            let parent = window_flags.parent_or_owner(self.hwnd());
             if !parent.is_null() {
                 point = util::screen_to_surface(parent, point).unwrap_or(point);
             }
@@ -157,13 +168,17 @@ impl Window {
     /// a popup, see `init`), the positioner is resolved relative to the screen's work area
     /// instead of the parent's content area.
     fn reposition(&self) {
-        let (anchored, positioner) = {
+        let (anchored, window_flags, positioner) = {
             let window_state = self.window_state_lock();
-            (window_state.anchored, window_state.positioner)
+            (window_state.anchored, window_state.window_flags, window_state.positioner)
         };
-        let Some((origin, size, current_size)) =
-            compute_anchored_placement(self.hwnd(), anchored, &positioner, self.scale_factor())
-        else {
+        let Some((origin, size, current_size)) = compute_anchored_placement(
+            self.hwnd(),
+            anchored,
+            window_flags,
+            &positioner,
+            self.scale_factor(),
+        ) else {
             return;
         };
 
@@ -505,6 +520,7 @@ impl CoreWindow for Window {
     fn set_blur(&self, _blur: bool) {}
 
     fn set_visible(&self, visible: bool) {
+        self.apply_pending_windowed_placement();
         let window = self.window;
         let window_state = Arc::clone(&self.window_state);
         self.thread_executor.execute_in_thread(move || {
@@ -554,6 +570,7 @@ impl CoreWindow for Window {
     }
 
     fn set_outer_position(&self, position: Position) {
+        self.apply_pending_windowed_placement();
         let position = self.translate_outer_position(position);
 
         let window_state = Arc::clone(&self.window_state);
@@ -588,6 +605,7 @@ impl CoreWindow for Window {
     }
 
     fn request_surface_size(&self, size: Size) -> Option<PhysicalSize<u32>> {
+        self.apply_pending_windowed_placement();
         let scale_factor = self.scale_factor();
         let physical_size = size.to_physical::<u32>(scale_factor);
 
@@ -812,6 +830,7 @@ impl CoreWindow for Window {
     }
 
     fn set_minimized(&self, minimized: bool) {
+        self.apply_pending_windowed_placement();
         let window = self.window;
         let window_state = Arc::clone(&self.window_state);
 
@@ -833,6 +852,7 @@ impl CoreWindow for Window {
     }
 
     fn set_maximized(&self, maximized: bool) {
+        self.apply_pending_windowed_placement();
         let window = self.window;
         let window_state = Arc::clone(&self.window_state);
 
@@ -964,14 +984,20 @@ impl CoreWindow for Window {
             // Update window bounds
             match &fullscreen {
                 Some(fullscreen) => {
-                    // Save window bounds before entering fullscreen
-                    let placement = unsafe {
-                        let mut placement = mem::zeroed();
-                        GetWindowPlacement(window.hwnd(), &mut placement);
-                        placement
-                    };
-
-                    window_state.lock().unwrap().saved_window = Some(SavedWindow { placement });
+                    // Save the windowed bounds before entering fullscreen. Keep them if they are
+                    // saved already: the window is then fullscreen already or a restore posted by
+                    // leaving fullscreen is still pending, and its current bounds are the
+                    // fullscreen ones.
+                    let mut window_state_lock = window_state.lock().unwrap();
+                    if window_state_lock.saved_window.is_none() {
+                        let placement = unsafe {
+                            let mut placement = mem::zeroed();
+                            GetWindowPlacement(window.hwnd(), &mut placement);
+                            placement
+                        };
+                        window_state_lock.saved_window = Some(SavedWindow { placement });
+                    }
+                    drop(window_state_lock);
 
                     let monitor = match &fullscreen {
                         Fullscreen::Exclusive(monitor, _)
@@ -1001,13 +1027,15 @@ impl CoreWindow for Window {
                     }
                 },
                 None => {
-                    let mut window_state_lock = window_state.lock().unwrap();
-                    if let Some(SavedWindow { placement }) = window_state_lock.saved_window.take() {
-                        drop(window_state_lock);
-                        unsafe {
-                            SetWindowPlacement(window.hwnd(), &placement);
-                            InvalidateRgn(window.hwnd(), ptr::null_mut(), false.into());
-                        }
+                    // Restore the windowed bounds in a later message, not in this one, which
+                    // restored the style above. With the style and the bounds changed within one
+                    // message, a transparent window rendered through a Vulkan swapchain on NVIDIA
+                    // stays opaque outside its drawn content until it is recreated (#4733).
+                    let posted = unsafe {
+                        PostMessageW(window.hwnd(), event_loop::RESTORE_WINDOWED_MSG_ID.get(), 0, 0)
+                    };
+                    if posted == false.into() {
+                        restore_windowed_placement(window.hwnd(), &window_state);
                     }
                 },
             }
@@ -1265,7 +1293,7 @@ fn translate_outer_position(
 
     let window_flags = window_state.lock().unwrap().window_flags;
     if window_flags.contains(WindowFlags::ANCHORED) && !window_flags.contains(WindowFlags::CHILD) {
-        let parent = unsafe { GetParent(hwnd) };
+        let parent = window_flags.parent_or_owner(hwnd);
         if !parent.is_null() {
             point = util::surface_to_screen(parent, point).unwrap_or(point);
         }
@@ -1288,6 +1316,7 @@ fn translate_outer_position(
 fn compute_anchored_placement(
     hwnd: HWND,
     anchored: bool,
+    window_flags: WindowFlags,
     positioner: &WindowPositioner,
     scale_factor: f64,
 ) -> Option<(LogicalPosition<f64>, LogicalSize<f64>, LogicalSize<f64>)> {
@@ -1307,7 +1336,7 @@ fn compute_anchored_placement(
     // parent, both the anchor rect and `set_outer_position` operate directly in screen
     // coordinates instead, so the origin is left at zero and the clip region stays in screen
     // space.
-    let parent = unsafe { GetParent(hwnd) };
+    let parent = window_flags.parent_or_owner(hwnd);
     let mut parent_origin = POINT { x: 0, y: 0 };
     if !parent.is_null() {
         parent_origin = util::surface_to_screen(parent, parent_origin).unwrap_or(parent_origin);
@@ -1347,13 +1376,13 @@ fn compute_anchored_placement(
 /// `WM_WINDOWPOSCHANGED`), so it's safe to update the OS window and `WindowState` directly
 /// instead of going through `EventLoopThreadExecutor`
 pub(crate) fn reposition_owned_popup(hwnd: HWND, window_state: &Mutex<WindowState>) {
-    let (anchored, positioner, scale_factor) = {
+    let (anchored, window_flags, positioner, scale_factor) = {
         let state = window_state.lock().unwrap();
-        (state.anchored, state.positioner, state.scale_factor)
+        (state.anchored, state.window_flags, state.positioner, state.scale_factor)
     };
 
     let Some((origin, size, current_size)) =
-        compute_anchored_placement(hwnd, anchored, &positioner, scale_factor)
+        compute_anchored_placement(hwnd, anchored, window_flags, &positioner, scale_factor)
     else {
         return;
     };
@@ -1616,7 +1645,7 @@ unsafe fn init(
 
     let mut fallback_parent = || match win_attributes.owner {
         Some(parent) => {
-            window_flags.set(WindowFlags::POPUP, true);
+            window_flags.set(WindowFlags::OWNED, true);
             Some(parent)
         },
         None => {
@@ -1627,9 +1656,9 @@ unsafe fn init(
 
     let parent = match attributes.parent_window() {
         Some(rwh_06::RawWindowHandle::Win32(handle)) => {
-            if !is_popup {
-                window_flags.set(WindowFlags::CHILD, true);
-            }
+            // A popup's parent is a native owner; an ordinary parented window is embedded.
+            window_flags.set(WindowFlags::OWNED, is_popup);
+            window_flags.set(WindowFlags::CHILD, !is_popup);
             if win_attributes.menu.is_some() {
                 warn!("Setting a menu on a child window is unsupported");
             }
@@ -1780,6 +1809,25 @@ unsafe fn taskbar_mark_fullscreen(handle: HWND, fullscreen: bool) {
         let mark_fullscreen_window = unsafe { (*(*task_bar_list2).lpVtbl).MarkFullscreenWindow };
         unsafe { mark_fullscreen_window(task_bar_list2, handle, fullscreen.into()) };
     })
+}
+
+/// Moves the window back to the windowed placement saved on entering fullscreen, if leaving
+/// fullscreen left that for a later message and the window has not gone fullscreen again since.
+pub(crate) fn restore_windowed_placement(hwnd: HWND, window_state: &Mutex<WindowState>) {
+    let saved_window = {
+        let mut window_state = window_state.lock().unwrap();
+        if window_state.fullscreen.is_some() {
+            return;
+        }
+        window_state.saved_window.take()
+    };
+    // Not under the lock: `SetWindowPlacement` sends messages that lock the window state.
+    if let Some(SavedWindow { placement }) = saved_window {
+        unsafe {
+            SetWindowPlacement(hwnd, &placement);
+            InvalidateRgn(hwnd, ptr::null_mut(), false.into());
+        }
+    }
 }
 
 pub(crate) unsafe fn set_skip_taskbar(hwnd: HWND, skip: bool) {

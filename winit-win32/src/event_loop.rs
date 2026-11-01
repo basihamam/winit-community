@@ -89,7 +89,7 @@ use winit_core::window::{Theme, Window as CoreWindow, WindowAttributes, WindowId
 
 pub(super) use self::runner::{Event, EventLoopRunner};
 use super::SelectedCursor;
-use super::window::set_skip_taskbar;
+use super::window::{restore_windowed_placement, set_skip_taskbar};
 use crate::dark_mode::try_theme;
 use crate::data_transfer::{
     DropSource, FileDropHandler, SourceDataObject, WinDataTransfer, WinTypedData,
@@ -131,6 +131,29 @@ impl WindowData {
 
     fn window_state_lock(&self) -> MutexGuard<'_, WindowState> {
         self.window_state.lock().unwrap()
+    }
+
+    /// Reports the new surface size from inside `WM_NCCALCSIZE`, ahead of `WM_SIZE`.
+    fn surface_size_calculated(&self, window: HWND, client: &RECT) {
+        let width = client.right.saturating_sub(client.left);
+        let height = client.bottom.saturating_sub(client.top);
+        // Ignore empty sizes and minimized windows, like `WM_SIZE`.
+        if width <= 0 || height <= 0 || util::is_minimized(window) {
+            return;
+        }
+        let size = PhysicalSize::new(width as u32, height as u32);
+
+        {
+            let mut state = self.window_state_lock();
+            if size == state.surface_size {
+                // Not a size change (e.g. a move).
+                return;
+            }
+            // Makes `WM_SIZE` skip this size, and `surface_size` correct for the event below.
+            state.surface_size = size;
+        }
+
+        self.send_window_event(window, WindowEvent::SurfaceResized(size));
     }
 
     fn take_pointer_contact(&self, pointer_id: u32) -> Option<PointerContact> {
@@ -1038,6 +1061,10 @@ pub(crate) static DESTROY_MSG_ID: LazyMessageId = LazyMessageId::new("Winit::Des
 // documentation in the `window_state` module for more information.
 pub(crate) static SET_RETAIN_STATE_ON_SIZE_MSG_ID: LazyMessageId =
     LazyMessageId::new("Winit::SetRetainMaximized\0");
+// Posted by `Window::set_fullscreen(None)` to move the window back to its windowed placement in
+// a later message than the one that restored its style. WPARAM and LPARAM are unused.
+pub(crate) static RESTORE_WINDOWED_MSG_ID: LazyMessageId =
+    LazyMessageId::new("Winit::RestoreWindowed\0");
 static THREAD_EVENT_TARGET_WINDOW_CLASS: LazyLock<Vec<u16>> =
     LazyLock::new(|| util::encode_wide("Winit Thread Event Target"));
 /// When the taskbar is created, it registers a message with the "TaskbarCreated" string and then
@@ -1161,6 +1188,9 @@ unsafe fn gain_active_focus(window: HWND, userdata: &WindowData) {
 
     update_modifiers(window, userdata);
 
+    // Reapply the cursor clip released on focus loss.
+    userdata.window_state_lock().mouse.set_cursor_flags(window, |_| ()).ok();
+
     userdata.send_window_event(window, Focused(true));
 }
 
@@ -1169,6 +1199,9 @@ unsafe fn lose_active_focus(window: HWND, userdata: &WindowData) {
 
     userdata.window_state_lock().modifiers_state = ModifiersState::empty();
     userdata.send_window_event(window, ModifiersChanged(ModifiersState::empty().into()));
+
+    // Release the cursor clip, which Windows keeps active even after focus loss.
+    userdata.window_state_lock().mouse.set_cursor_flags(window, |_| ()).ok();
 
     userdata.send_window_event(window, Focused(false));
 }
@@ -1317,8 +1350,17 @@ unsafe fn public_window_callback_inner(
     let callback = || match msg {
         WM_NCCALCSIZE => {
             let window_flags = userdata.window_state_lock().window_flags;
-            if wparam == 0 || window_flags.contains(WindowFlags::MARKER_DECORATIONS) {
+            if wparam == 0 {
                 result = ProcResult::DefWindowProc(wparam);
+                return;
+            }
+
+            if window_flags.contains(WindowFlags::MARKER_DECORATIONS) {
+                // The system writes the new client rectangle into `rgrc[0]`.
+                let res = unsafe { DefWindowProcW(window, msg, wparam, lparam) };
+                let params = unsafe { &*(lparam as *const NCCALCSIZE_PARAMS) };
+                userdata.surface_size_calculated(window, &params.rgrc[0]);
+                result = ProcResult::Value(res);
                 return;
             }
 
@@ -1351,6 +1393,7 @@ unsafe fn public_window_callback_inner(
                 params.rgrc[0].bottom += 1;
             }
 
+            userdata.surface_size_calculated(window, &params.rgrc[0]);
             result = ProcResult::Value(0);
         },
 
@@ -1713,7 +1756,7 @@ unsafe fn public_window_callback_inner(
                 // Next, receive preedit range for next composing if exist.
                 if (lparam as u32 & GCS_COMPSTR) != 0 {
                     if let Some((text, first, last)) =
-                        unsafe { ime_context.get_composing_text_and_cursor() }
+                        unsafe { ime_context.get_composing_text_and_cursor(lparam as u32) }
                     {
                         userdata.window_state_lock().ime_state = ImeState::Preedit;
                         let cursor_range = first.map(|f| (f, last.unwrap_or(f)));
@@ -2671,6 +2714,9 @@ unsafe fn public_window_callback_inner(
                 window_state.set_window_flags_in_place(|f| {
                     f.set(WindowFlags::MARKER_RETAIN_STATE_ON_SIZE, wparam != 0)
                 });
+                result = ProcResult::Value(0);
+            } else if msg == RESTORE_WINDOWED_MSG_ID.get() {
+                restore_windowed_placement(window, &userdata.window_state);
                 result = ProcResult::Value(0);
             } else if msg == TASKBAR_CREATED.get() {
                 let skip_taskbar = userdata.window_state_lock().skip_taskbar;
