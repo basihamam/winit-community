@@ -71,6 +71,9 @@ pub struct WindowState {
     /// The seat and serial of the touch currently down on the window, if any.
     pub touch_down: Option<(WlSeat, u32)>,
 
+    /// The seat and serial of the latest key press, button press or touch down on the window.
+    pub latest_input: Option<(WlSeat, u32)>,
+
     selected_cursor: SelectedCursor,
 
     /// Whether the cursor is visible.
@@ -151,6 +154,12 @@ pub struct WindowState {
     /// Initial window size provided by the user. Removed on the first
     /// configure.
     initial_size: Option<Size>,
+
+    /// Min and max sizes requested by the user, as given. The hints sent before the first
+    /// configure may use the wrong scale factor, so the first configure converts them again.
+    requested_min_surface_size: Option<Size>,
+    /// See `requested_min_surface_size`.
+    requested_max_surface_size: Option<Size>,
 
     /// The state of the frame callback.
     frame_callback_state: FrameCallbackState,
@@ -238,6 +247,7 @@ impl WindowState {
             pointer_constraints,
             pointers: Default::default(),
             touch_down: None,
+            latest_input: None,
             queue_handle: queue_handle.clone(),
             resizable: true,
             scale_factor,
@@ -246,6 +256,8 @@ impl WindowState {
             size: initial_size.to_logical(1.),
             stateless_size: initial_size.to_logical(1.),
             initial_size: Some(initial_size),
+            requested_min_surface_size: None,
+            requested_max_surface_size: None,
             text_inputs: Vec::new(),
             theme,
             title: String::default(),
@@ -570,6 +582,20 @@ impl WindowState {
     /// Get the resize increments of the window.
     pub fn resize_increments(&self) -> Option<LogicalSize<u32>> {
         self.resize_increments
+    }
+
+    /// See `requested_min_surface_size`.
+    pub fn request_min_surface_size(&mut self, size: Option<Size>) {
+        self.requested_min_surface_size = size;
+        let scale_factor = self.scale_factor();
+        self.set_min_surface_size(size.map(|size| size.to_logical(scale_factor)));
+    }
+
+    /// See `requested_max_surface_size`.
+    pub fn request_max_surface_size(&mut self, size: Option<Size>) {
+        self.requested_max_surface_size = size;
+        let scale_factor = self.scale_factor();
+        self.set_max_surface_size(size.map(|size| size.to_logical(scale_factor)));
     }
 
     /// Set maximum inner window size.

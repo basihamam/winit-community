@@ -129,12 +129,8 @@ impl Window {
         // Set the window title.
         window_state.set_title(attributes.title);
 
-        // Set the min and max sizes. We must set the hints upon creating a window, so
-        // we use the default `1.` scaling...
-        let min_size = attributes.min_surface_size.map(|size| size.to_logical(1.));
-        let max_size = attributes.max_surface_size.map(|size| size.to_logical(1.));
-        window_state.set_min_surface_size(min_size);
-        window_state.set_max_surface_size(max_size);
+        window_state.request_min_surface_size(attributes.min_surface_size);
+        window_state.request_max_surface_size(attributes.max_surface_size);
 
         // Non-resizable implies that the min and max sizes are set to the same value.
         window_state.set_resizable(attributes.resizable);
@@ -244,6 +240,12 @@ impl Window {
         let xdg_activation_token =
             xdg_activation.get_activation_token(&self.common.handles.queue_handle, data);
         xdg_activation_token.set_surface(self.surface());
+        // Compositors use the serial to tell a request the user made from one made on its own.
+        if let Some(state) = self.common.state.upgrade() {
+            if let Some((seat, serial)) = &state.lock().unwrap().latest_input {
+                xdg_activation_token.set_serial(*serial, seat);
+            }
+        }
         xdg_activation_token.commit();
 
         Ok(serial)

@@ -17,7 +17,7 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromRect, MonitorFromWindow,
-    RDW_INTERNALPAINT, RedrawWindow, SC_SCREENSAVE, ScreenToClient, ValidateRect,
+    RDW_INTERNALPAINT, RDW_INVALIDATE, RedrawWindow, SC_SCREENSAVE, ValidateRect,
 };
 use windows_sys::Win32::System::DataExchange::CountClipboardFormats;
 use windows_sys::Win32::System::Ole::{OleSetClipboard, RevokeDragDrop};
@@ -1803,6 +1803,10 @@ unsafe fn public_window_callback_inner(
 
             let x = util::get_x_lparam(lparam as u32) as i32;
             let y = util::get_y_lparam(lparam as u32) as i32;
+            let Ok(point) = util::client_to_surface(window, POINT { x, y }) else {
+                return;
+            };
+            let (x, y) = (point.x, point.y);
             let position = PhysicalPosition::new(x as f64, y as f64);
 
             let cursor_moved;
@@ -1988,6 +1992,10 @@ unsafe fn public_window_callback_inner(
 
             let x = util::get_x_lparam(lparam as u32) as i32;
             let y = util::get_y_lparam(lparam as u32) as i32;
+            let Ok(point) = util::client_to_surface(window, POINT { x, y }) else {
+                return;
+            };
+            let (x, y) = (point.x, point.y);
             let position = PhysicalPosition::new(x as f64, y as f64);
 
             userdata.send_window_event(window, PointerButton {
@@ -2018,6 +2026,10 @@ unsafe fn public_window_callback_inner(
 
             let x = util::get_x_lparam(lparam as u32) as i32;
             let y = util::get_y_lparam(lparam as u32) as i32;
+            let Ok(point) = util::client_to_surface(window, POINT { x, y }) else {
+                return;
+            };
+            let (x, y) = (point.x, point.y);
             let position = PhysicalPosition::new(x as f64, y as f64);
 
             userdata.send_window_event(window, PointerButton {
@@ -2049,6 +2061,10 @@ unsafe fn public_window_callback_inner(
 
             let x = util::get_x_lparam(lparam as u32) as i32;
             let y = util::get_y_lparam(lparam as u32) as i32;
+            let Ok(point) = util::client_to_surface(window, POINT { x, y }) else {
+                return;
+            };
+            let (x, y) = (point.x, point.y);
             let position = PhysicalPosition::new(x as f64, y as f64);
 
             // 1 is defined as back, 2 as forward; other codes are unexpected.
@@ -2079,6 +2095,10 @@ unsafe fn public_window_callback_inner(
 
             let x = util::get_x_lparam(lparam as u32) as i32;
             let y = util::get_y_lparam(lparam as u32) as i32;
+            let Ok(point) = util::client_to_surface(window, POINT { x, y }) else {
+                return;
+            };
+            let (x, y) = (point.x, point.y);
             let position = PhysicalPosition::new(x as f64, y as f64);
 
             // 1 is defined as back, 2 as forward; other codes are unexpected.
@@ -2125,11 +2145,11 @@ unsafe fn public_window_callback_inner(
             } {
                 unsafe { inputs.set_len(pcount) };
                 for input in &inputs {
-                    let mut position = POINT { x: input.x / 100, y: input.y / 100 };
+                    let position = POINT { x: input.x / 100, y: input.y / 100 };
 
-                    if unsafe { ScreenToClient(window, &mut position) } == false.into() {
+                    let Ok(position) = util::screen_to_surface(window, position) else {
                         continue;
-                    }
+                    };
 
                     let x = position.x as f64 + (input.x % 100) as f64 / 100f64;
                     let y = position.y as f64 + (input.y % 100) as f64 / 100f64;
@@ -2273,11 +2293,11 @@ unsafe fn public_window_callback_inner(
                     let y = display_rect.top as f64
                         + pointer_info.ptHimetricLocation.y as f64 * himetric_to_pixel_ratio_y;
 
-                    let mut location = POINT { x: x.floor() as i32, y: y.floor() as i32 };
+                    let location = POINT { x: x.trunc() as i32, y: y.trunc() as i32 };
 
-                    if unsafe { ScreenToClient(window, &mut location) } == false.into() {
+                    let Ok(location) = util::screen_to_surface(window, location) else {
                         continue;
-                    }
+                    };
 
                     let x = location.x as f64 + x.fract();
                     let y = location.y as f64 + y.fract();
@@ -2418,7 +2438,22 @@ unsafe fn public_window_callback_inner(
                     unsafe { lose_active_focus(window, userdata) };
                 }
             }
-            result = ProcResult::DefWindowProc(wparam);
+            // An undecorated window keeps `WS_CAPTION` and gives its whole area to the client in
+            // `WM_NCCALCSIZE`, but when DWM does not draw its frame (as after leaving fullscreen)
+            // `DefWindowProc` still paints the caption into the top of the window. A transparent
+            // window shows it through its transparent pixels. With an `lParam` of -1,
+            // `DefWindowProc` does not repaint the non-client area:
+            // https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-ncactivate
+            let decorated =
+                userdata.window_state_lock().window_flags.contains(WindowFlags::MARKER_DECORATIONS);
+            result = if decorated {
+                ProcResult::DefWindowProc(wparam)
+            } else {
+                ProcResult::Value(unsafe { DefWindowProcW(window, msg, wparam, -1) })
+            };
+
+            // Repaint the client area so the window does not keep stale non-client artifacts.
+            unsafe { RedrawWindow(window, ptr::null(), ptr::null_mut(), RDW_INVALIDATE) };
         },
 
         WM_SETFOCUS => {
