@@ -38,6 +38,8 @@ use crate::ime::{self, ImeState};
 use crate::keycodes;
 
 static HAS_FOCUS: AtomicBool = AtomicBool::new(true);
+/// Flag to ignore finger touches (palm rejection) while stylus is in contact.
+static STYLUS_DOWN: AtomicBool = AtomicBool::new(false);
 
 /// Returns the minimum `Option<Duration>`, taking into account that `None`
 /// equates to an infinite timeout, not a zero timeout (so can't just use
@@ -117,6 +119,8 @@ pub struct EventLoop {
     primary_pointer: Option<FingerId>,
     ignore_volume_keys: bool,
     combining_accent: Option<char>,
+    last_surface_size: PhysicalSize<u32>,
+    last_scale_factor: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -150,6 +154,8 @@ impl EventLoop {
         let event_loop_proxy = Arc::new(EventLoopProxy::new(android_app.create_waker()));
 
         let redraw_flag = SharedFlag::new();
+        let scale_factor = scale_factor(android_app);
+        let last_surface_size = screen_size(android_app);
 
         Ok(Self {
             android_app: android_app.clone(),
@@ -169,6 +175,8 @@ impl EventLoop {
             cause: StartCause::Init,
             ignore_volume_keys: attributes.ignore_volume_keys,
             combining_accent: None,
+            last_surface_size,
+            last_scale_factor: scale_factor,
         })
     }
 
@@ -199,10 +207,14 @@ impl EventLoop {
                 MainEvent::TerminateWindow { .. } => {
                     app.destroy_surfaces(&self.window_target);
                 },
-                MainEvent::WindowResized { .. } => resized = true,
+                MainEvent::WindowResized { .. } => {
+                    resized = true;
+                    pending_redraw = true;
+                },
                 MainEvent::RedrawNeeded { .. } => pending_redraw = true,
                 MainEvent::ContentRectChanged { .. } => {
-                    warn!("TODO: find a way to notify application of content rect change");
+                    resized = true;
+                    pending_redraw = true;
                 },
                 MainEvent::GainedFocus => {
                     HAS_FOCUS.store(true, Ordering::Relaxed);
@@ -215,9 +227,9 @@ impl EventLoop {
                     app.window_event(&self.window_target, GLOBAL_WINDOW, event);
                 },
                 MainEvent::ConfigChanged { .. } => {
-                    let old_scale_factor = scale_factor(&self.android_app);
                     let scale_factor = scale_factor(&self.android_app);
-                    if (scale_factor - old_scale_factor).abs() < f64::EPSILON {
+                    if (scale_factor - self.last_scale_factor).abs() > f64::EPSILON {
+                        self.last_scale_factor = scale_factor;
                         let new_surface_size = Arc::new(Mutex::new(screen_size(&self.android_app)));
                         let event = event::WindowEvent::ScaleFactorChanged {
                             surface_size_writer: SurfaceSizeWriter::new(Arc::downgrade(
@@ -227,6 +239,8 @@ impl EventLoop {
                         };
 
                         app.window_event(&self.window_target, GLOBAL_WINDOW, event);
+                        resized = true;
+                        pending_redraw = true;
                     }
                 },
                 MainEvent::LowMemory => {
@@ -302,10 +316,13 @@ impl EventLoop {
                     let height = native_window.height() as _;
                     PhysicalSize::new(width, height)
                 } else {
-                    PhysicalSize::new(0, 0)
+                    screen_size(&self.android_app)
                 };
-                let event = event::WindowEvent::SurfaceResized(size);
-                app.window_event(&self.window_target, GLOBAL_WINDOW, event);
+                if size != self.last_surface_size {
+                    self.last_surface_size = size;
+                    let event = event::WindowEvent::SurfaceResized(size);
+                    app.window_event(&self.window_target, GLOBAL_WINDOW, event);
+                }
             }
 
             pending_redraw |= self.redraw_flag.get_and_reset();
@@ -333,6 +350,42 @@ impl EventLoop {
             InputEvent::MotionEvent(motion_event) => {
                 let device_id = Some(DeviceId::from_raw(motion_event.device_id() as i64));
                 let action = motion_event.action();
+
+                if matches!(action, MotionAction::HoverMove | MotionAction::HoverEnter) {
+                    if let Some(pointer) = motion_event.pointers().next() {
+                        let position = PhysicalPosition::new(pointer.x() as _, pointer.y() as _);
+                        app.window_event(
+                            &self.window_target,
+                            GLOBAL_WINDOW,
+                            event::WindowEvent::PointerMoved {
+                                device_id,
+                                primary: true,
+                                position,
+                                source: event::PointerSource::Mouse,
+                            },
+                        );
+                    }
+                    STYLUS_DOWN.store(false, Ordering::Relaxed);
+                    return InputStatus::Handled;
+                }
+
+                let pointer_index = motion_event.pointer_index();
+                let tool_type = motion_event.pointer_at_index(pointer_index).tool_type();
+                if matches!(tool_type, android_activity::input::ToolType::Stylus) {
+                    match action {
+                        MotionAction::Down | MotionAction::PointerDown | MotionAction::Move => {
+                            STYLUS_DOWN.store(true, Ordering::Relaxed);
+                        },
+                        MotionAction::Up | MotionAction::PointerUp | MotionAction::Cancel => {
+                            STYLUS_DOWN.store(false, Ordering::Relaxed);
+                        },
+                        _ => (),
+                    }
+                } else if tool_type == android_activity::input::ToolType::Finger
+                    && STYLUS_DOWN.load(Ordering::Relaxed)
+                {
+                    return InputStatus::Handled;
+                }
 
                 let pointers: Option<
                     Box<dyn Iterator<Item = android_activity::input::Pointer<'_>>>,
@@ -1005,7 +1058,14 @@ impl CoreWindow for Window {
     }
 
     fn safe_area(&self) -> PhysicalInsets<u32> {
-        PhysicalInsets::new(0, 0, 0, 0)
+        let insets = self.app.content_rect();
+        let outer_size = self.outer_size();
+        PhysicalInsets {
+            top: insets.top as u32,
+            left: insets.left as u32,
+            bottom: outer_size.height.saturating_sub(insets.bottom as u32),
+            right: outer_size.width.saturating_sub(insets.right as u32),
+        }
     }
 
     fn set_min_surface_size(&self, _: Option<Size>) {}

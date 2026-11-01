@@ -962,7 +962,8 @@ pub trait Window: Any + Send + Sync + fmt::Debug {
     ///
     /// ## Platform-specific
     ///
-    /// - **Android / Orbital / Wayland / Windows / X11:** Unimplemented, returns `(0, 0, 0, 0)`.
+    /// - **Android:** Returns the insets computed from the application content rect.
+    /// - **Orbital / Wayland / Windows / X11:** Unimplemented, returns `(0, 0, 0, 0)`.
     ///
     /// ## Example
     ///
@@ -1301,6 +1302,8 @@ pub trait Window: Any + Send + Sync + fmt::Debug {
     /// ## Platform-specific
     ///
     /// - **iOS / Android / Web / Orbital:** Unsupported.
+    /// - **X11:** Area is not supported, only position. The bottom-right corner of the provided
+    ///   area is reported as the position.
     ///
     /// [chinese]: https://support.apple.com/guide/chinese-input-method/use-the-candidate-window-cim12992/104/mac/12.0
     /// [japanese]: https://support.apple.com/guide/japanese-input-method/use-the-candidate-window-jpim10262/6.3/mac/12.0
