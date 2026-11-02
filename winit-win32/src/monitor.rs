@@ -230,8 +230,8 @@ impl MonitorHandleProvider for MonitorHandle {
         if hdc.is_null() {
             return None;
         }
-        let width = unsafe { GetDeviceCaps(hdc, HORZSIZE) };
-        let height = unsafe { GetDeviceCaps(hdc, VERTSIZE) };
+        let width = unsafe { GetDeviceCaps(hdc, HORZSIZE as i32) };
+        let height = unsafe { GetDeviceCaps(hdc, VERTSIZE as i32) };
         unsafe { DeleteDC(hdc) };
 
         let mut physical_size = (width > 0 && height > 0)
