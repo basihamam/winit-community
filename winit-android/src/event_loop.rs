@@ -371,6 +371,35 @@ impl EventLoop {
                     return InputStatus::Handled;
                 }
 
+                if action == MotionAction::Cancel {
+                    if let Some(primary) = self.primary_pointer.take() {
+                        app.window_event(
+                            &self.window_target,
+                            GLOBAL_WINDOW,
+                            event::WindowEvent::PointerButton {
+                                device_id,
+                                primary: true,
+                                state: event::ElementState::Released,
+                                position: PhysicalPosition::new(0.0, 0.0),
+                                button: event::ButtonSource::Touch { finger_id: primary, force: None },
+                                is_macos_activation_click: false,
+                            },
+                        );
+                        app.window_event(
+                            &self.window_target,
+                            GLOBAL_WINDOW,
+                            event::WindowEvent::PointerLeft {
+                                device_id,
+                                primary: true,
+                                position: None,
+                                kind: event::PointerKind::Touch(primary),
+                            },
+                        );
+                    }
+                    STYLUS_DOWN.store(false, Ordering::Relaxed);
+                    return InputStatus::Handled;
+                }
+
                 let pointer_index = motion_event.pointer_index();
                 let tool_type = motion_event.pointer_at_index(pointer_index).tool_type();
                 if matches!(tool_type, android_activity::input::ToolType::Stylus) {

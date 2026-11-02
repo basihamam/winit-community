@@ -9,8 +9,8 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, Message, define_class, msg_send};
 use objc2_app_kit::{
-    NSApplication, NSCursor, NSDragOperation, NSDraggingSession, NSEvent, NSEventPhase,
-    NSResponder, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
+    NSApplication, NSCursor, NSDragOperation, NSDraggingSession, NSEvent, NSEventModifierFlags,
+    NSEventPhase, NSResponder, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
     NSViewLayerContentsRedrawPolicy, NSWindow, NSWindowStyleMask,
 };
 use objc2_core_foundation::CGRect;
@@ -1227,6 +1227,34 @@ impl WinitView {
                 let physical_key = scancode_to_physicalkey(scancode as u32);
 
                 let logical_key = code_to_key(physical_key, scancode);
+
+                if logical_key == Key::Named(NamedKey::CapsLock) {
+                    let is_active = ns_event.modifierFlags().contains(NSEventModifierFlags::CapsLock);
+                    let mut phys_mod_state = self.ivars().phys_modifiers.borrow_mut();
+                    let phys_mod = phys_mod_state.entry(logical_key.clone()).or_insert(ModLocationMask::empty());
+                    let is_pressed = is_active;
+                    let state = if is_pressed { Pressed } else { Released };
+                    *phys_mod = if is_pressed { ModLocationMask::LEFT } else { ModLocationMask::empty() };
+                    drop(phys_mod_state);
+
+                    let event = KeyEvent {
+                        location: KeyLocation::Standard,
+                        logical_key: logical_key.clone(),
+                        physical_key,
+                        repeat: false,
+                        state,
+                        text: None,
+                        text_with_all_modifiers: None,
+                        key_without_modifiers: logical_key,
+                    };
+                    self.queue_event(WindowEvent::KeyboardInput {
+                        device_id: None,
+                        event,
+                        is_synthetic: false,
+                    });
+                    break 'send_event;
+                }
+
                 // Ignore processing of unknown modifiers because we can't determine whether
                 // it was pressed or release reliably.
                 //

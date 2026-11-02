@@ -394,7 +394,7 @@ impl EventLoop {
         };
 
         // Set initial device event filter.
-        window_target.update_listen_device_events(true);
+        window_target.update_listen_device_events(false);
 
         let event_processor = EventProcessor {
             target: window_target,
@@ -729,6 +729,15 @@ impl ActiveEventLoop {
         &self.xconn
     }
 
+    /// Returns whether any window in this event loop currently has focus.
+    #[inline]
+    pub fn has_focus(&self) -> bool {
+        self.windows
+            .borrow()
+            .iter()
+            .any(|(_, window)| window.upgrade().is_some_and(|window| window.has_focus()))
+    }
+
     /// Update the device event based on window focus.
     pub fn update_listen_device_events(&self, focus: bool) {
         let device_events = self.device_events.get() == DeviceEvents::Always
@@ -846,6 +855,8 @@ impl RootActiveEventLoop for ActiveEventLoop {
 
     fn listen_device_events(&self, allowed: DeviceEvents) {
         self.device_events.set(allowed);
+        let has_focus = self.has_focus();
+        self.update_listen_device_events(has_focus);
     }
 
     fn set_control_flow(&self, control_flow: ControlFlow) {

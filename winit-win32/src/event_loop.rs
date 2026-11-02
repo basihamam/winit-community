@@ -2937,8 +2937,24 @@ unsafe fn public_window_callback_inner(
                     dragging_window,
                 )
             } else {
-                // The suggested position is fine w/o adjustment on Windows 11+
-                suggested_rect
+                // If the user requested a custom size in ScaleFactorChanged, honor it
+                let suggested_surface_size = PhysicalSize::new(
+                    (suggested_rect.right - suggested_rect.left - margin_left) as u32,
+                    (suggested_rect.bottom - suggested_rect.top - margin_top) as u32,
+                );
+                if new_physical_surface_size != suggested_surface_size {
+                    let (w, h): (u32, u32) = window_flags
+                        .adjust_size(window, new_physical_surface_size)
+                        .into();
+                    RECT {
+                        left: suggested_rect.left,
+                        top: suggested_rect.top,
+                        right: suggested_rect.left + w as i32,
+                        bottom: suggested_rect.top + h as i32,
+                    }
+                } else {
+                    suggested_rect
+                }
             };
 
             if !userdata.window_state_lock().currently_repositioning {

@@ -185,10 +185,19 @@ impl WindowState {
                     min + steps.max(floor_steps) * increment
                 };
                 let min = self.min_surface_size;
-                let (width, height) = (
-                    snap(new_size.width, min.width, increments.width, MIN_WINDOW_SIZE.width),
-                    snap(new_size.height, min.height, increments.height, MIN_WINDOW_SIZE.height),
-                );
+                let width_changed = self.size.width != new_size.width;
+                let height_changed = self.size.height != new_size.height;
+
+                let width = if width_changed || !configure.is_resizing() {
+                    snap(new_size.width, min.width, increments.width, MIN_WINDOW_SIZE.width)
+                } else {
+                    self.size.width
+                };
+                let height = if height_changed || !configure.is_resizing() {
+                    snap(new_size.height, min.height, increments.height, MIN_WINDOW_SIZE.height)
+                } else {
+                    self.size.height
+                };
 
                 new_size = (width, height).into();
             }

@@ -378,28 +378,43 @@ impl ActiveEventLoop {
 
         let runner = self.runner.clone();
         let modifiers = self.modifiers.clone();
-        canvas.on_mouse_wheel(move |delta, active_modifiers| {
-            let modifiers_changed =
-                (has_focus.get() && modifiers.get() != active_modifiers).then(|| {
-                    modifiers.set(active_modifiers);
+        canvas.on_mouse_wheel(
+            move |delta, active_modifiers| {
+                let modifiers_changed =
+                    (has_focus.get() && modifiers.get() != active_modifiers).then(|| {
+                        modifiers.set(active_modifiers);
+                        Event::WindowEvent {
+                            window_id,
+                            event: WindowEvent::ModifiersChanged(active_modifiers.into()),
+                        }
+                    });
+
+                runner.send_events(modifiers_changed.into_iter().chain(iter::once(
                     Event::WindowEvent {
                         window_id,
-                        event: WindowEvent::ModifiersChanged(active_modifiers.into()),
-                    }
-                });
-
-            runner.send_events(modifiers_changed.into_iter().chain(iter::once(
-                Event::WindowEvent {
-                    window_id,
-                    event: WindowEvent::MouseWheel {
-                        device_id: None,
-                        delta,
-                        phase: TouchPhase::Moved,
-                        source: ScrollSource::Unknown,
+                        event: WindowEvent::MouseWheel {
+                            device_id: None,
+                            delta,
+                            phase: TouchPhase::Moved,
+                            source: ScrollSource::Unknown,
+                        },
                     },
-                },
-            )));
-        });
+                )));
+            },
+            {
+                let runner = self.runner.clone();
+                move |delta, phase| {
+                    runner.send_event(Event::WindowEvent {
+                        window_id,
+                        event: WindowEvent::PinchGesture {
+                            device_id: None,
+                            delta,
+                            phase,
+                        },
+                    });
+                }
+            },
+        );
 
         let runner = self.runner.clone();
         canvas.on_dark_mode(move |is_dark_mode| {

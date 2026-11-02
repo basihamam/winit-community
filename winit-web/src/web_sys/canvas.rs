@@ -14,7 +14,7 @@ use web_sys::{
 use winit_core::error::CreateWindowError;
 use winit_core::event::{
     ButtonSource, DeviceId, ElementState, FingerId, Force, MouseScrollDelta, PointerKind,
-    PointerSource, SurfaceSizeWriter, WindowEvent,
+    PointerSource, SurfaceSizeWriter, TouchPhase, WindowEvent,
 };
 use winit_core::keyboard::{Key, KeyLocation, ModifiersState, PhysicalKey};
 use winit_core::monitor::Fullscreen;
@@ -442,9 +442,10 @@ impl Canvas {
         )
     }
 
-    pub fn on_mouse_wheel<F>(&self, mut handler: F)
+    pub fn on_mouse_wheel<F, P>(&self, mut wheel_handler: F, mut pinch_handler: P)
     where
         F: 'static + FnMut(MouseScrollDelta, ModifiersState),
+        P: 'static + FnMut(f64, TouchPhase),
     {
         let window = self.common.window.clone();
         let prevent_default = Rc::clone(&self.prevent_default);
@@ -454,9 +455,15 @@ impl Canvas {
                     event.prevent_default();
                 }
 
+                if event.ctrl_key() {
+                    let delta = -event.delta_y() * 0.01;
+                    pinch_handler(delta, TouchPhase::Moved);
+                    return;
+                }
+
                 if let Some(delta) = event::mouse_scroll_delta(&window, &event) {
                     let modifiers = event::mouse_modifiers(&event);
-                    handler(delta, modifiers);
+                    wheel_handler(delta, modifiers);
                 }
             }));
     }
