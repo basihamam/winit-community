@@ -837,8 +837,9 @@ impl RootActiveEventLoop for ActiveEventLoop {
         self.xconn.primary_monitor().ok().map(|monitor| CoreMonitorHandle(Arc::new(monitor)))
     }
 
+    #[inline]
     fn system_theme(&self) -> Option<Theme> {
-        None
+        winit_common::theme::read_linux_system_theme()
     }
 
     fn listen_device_events(&self, allowed: DeviceEvents) {

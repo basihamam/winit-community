@@ -247,6 +247,11 @@ impl MonitorHandleProvider for MonitorHandle {
     fn video_modes(&self) -> Box<dyn Iterator<Item = VideoMode>> {
         Box::new(self.video_mode_handles().map(|mode| mode.mode))
     }
+
+    fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        let size = unsafe { ffi::CGDisplayScreenSize(self.display_id()) };
+        Some((NonZeroU32::new(size.width as u32)?, NonZeroU32::new(size.height as u32)?))
+    }
 }
 
 pub fn available_monitors() -> VecDeque<MonitorHandle> {

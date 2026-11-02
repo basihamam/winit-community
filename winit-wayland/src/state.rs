@@ -342,8 +342,13 @@ impl WindowHandler for WinitState {
                 .expect("got configure for dead window.")
                 .lock()
                 .unwrap();
+            let was_suspended = window_state.is_suspended();
             self.window_compositor_updates[index].resized |=
                 window_state.configure_window(configure, &self.shm, &self.subcompositor_state);
+            let suspended = window_state.is_suspended();
+            if suspended != was_suspended {
+                self.window_compositor_updates[index].occluded = Some(suspended);
+            }
             window_state.clear_unmapped();
         }
 
@@ -524,11 +529,20 @@ pub struct WindowCompositorUpdate {
 
     /// Close the window.
     pub close_window: bool,
+
+    /// Whether the window is occluded (suspended).
+    pub occluded: Option<bool>,
 }
 
 impl WindowCompositorUpdate {
     fn new(window_id: WindowId) -> Self {
-        Self { window_id, resized: false, scale_changed: false, close_window: false }
+        Self {
+            window_id,
+            resized: false,
+            scale_changed: false,
+            close_window: false,
+            occluded: None,
+        }
     }
 }
 

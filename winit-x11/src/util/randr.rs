@@ -1,4 +1,4 @@
-use std::num::NonZeroU16;
+use std::num::{NonZeroU16, NonZeroU32};
 use std::str::FromStr;
 use std::{env, str};
 
@@ -55,7 +55,7 @@ impl XConnection {
         &self,
         resources: &monitor::ScreenResources,
         crtc: &randr::GetCrtcInfoReply,
-    ) -> Option<(String, f64, Vec<VideoModeHandle>)> {
+    ) -> Option<(String, f64, Vec<VideoModeHandle>, Option<(NonZeroU32, NonZeroU32)>)> {
         let output_info = match self
             .xcb_connection()
             .randr_get_output_info(crtc.outputs[0], x11rb::CURRENT_TIME)
@@ -149,7 +149,10 @@ impl XConnection {
             },
         };
 
-        Some((name, scale_factor, modes))
+        let physical_size = NonZeroU32::new(output_info.mm_width)
+            .zip(NonZeroU32::new(output_info.mm_height));
+
+        Some((name, scale_factor, modes, physical_size))
     }
 
     pub fn set_crtc_config(

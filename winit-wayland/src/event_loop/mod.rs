@@ -439,6 +439,10 @@ impl EventLoop {
             if compositor_update.close_window {
                 app.window_event(&self.active_event_loop, window_id, WindowEvent::CloseRequested);
             }
+
+            if let Some(occluded) = compositor_update.occluded {
+                app.window_event(&self.active_event_loop, window_id, WindowEvent::Occluded(occluded));
+            }
         }
 
         // Push the events directly from the window.
@@ -748,7 +752,7 @@ impl RootActiveEventLoop for ActiveEventLoop {
 
     #[inline]
     fn system_theme(&self) -> Option<Theme> {
-        None
+        winit_common::theme::read_linux_system_theme()
     }
 
     fn create_window(

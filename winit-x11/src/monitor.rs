@@ -49,6 +49,8 @@ pub struct MonitorHandle {
     pub(crate) rect: util::AaRect,
     /// Supported video modes on this monitor
     pub(crate) video_modes: Vec<VideoModeHandle>,
+    /// Physical size in millimeters
+    pub(crate) physical_size: Option<(NonZeroU32, NonZeroU32)>,
 }
 
 impl MonitorHandleProvider for MonitorHandle {
@@ -78,6 +80,10 @@ impl MonitorHandleProvider for MonitorHandle {
 
     fn video_modes(&self) -> Box<dyn Iterator<Item = VideoMode>> {
         Box::new(self.video_modes.clone().into_iter().map(|mode| mode.into()))
+    }
+
+    fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        self.physical_size
     }
 }
 
@@ -127,13 +133,23 @@ impl MonitorHandle {
         crtc: &randr::GetCrtcInfoReply,
         primary: bool,
     ) -> Option<Self> {
-        let (name, scale_factor, video_modes) = xconn.get_output_info(resources, crtc)?;
+        let (name, scale_factor, video_modes, physical_size) =
+            xconn.get_output_info(resources, crtc)?;
         let dimensions = (crtc.width as u32, crtc.height as u32);
         let position = (crtc.x as i32, crtc.y as i32);
 
         let rect = util::AaRect::new(position, dimensions);
 
-        Some(MonitorHandle { id, name, scale_factor, position, primary, rect, video_modes })
+        Some(MonitorHandle {
+            id,
+            name,
+            scale_factor,
+            position,
+            primary,
+            rect,
+            video_modes,
+            physical_size,
+        })
     }
 
     pub fn dummy() -> Self {
@@ -145,6 +161,7 @@ impl MonitorHandle {
             primary: true,
             rect: util::AaRect::new((0, 0), (1, 1)),
             video_modes: Vec::new(),
+            physical_size: None,
         }
     }
 

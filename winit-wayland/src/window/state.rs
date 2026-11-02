@@ -12,7 +12,7 @@ use sctk::reexports::client::backend::ObjectId;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_shm::WlShm;
 use sctk::reexports::client::{Proxy, QueueHandle};
-use sctk::reexports::csd_frame::DecorationsFrame;
+use sctk::reexports::csd_frame::{DecorationsFrame, WindowState as XdgWindowState};
 use sctk::reexports::protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
@@ -141,6 +141,9 @@ pub struct WindowState {
     /// Whether we should tell the compositor that we prefer drawing decorations ourself.
     prefer_csd: bool,
 
+    /// Whether to fallback to CSD if SSD is declined by the compositor.
+    pub(crate) csd_fallback: bool,
+
     /// Min size.
     min_surface_size: LogicalSize<u32>,
     max_surface_size: Option<LogicalSize<u32>>,
@@ -207,6 +210,7 @@ impl WindowState {
         window: WindowType,
         theme: Option<Theme>,
         prefer_csd: bool,
+        csd_fallback: bool,
         scale_factor: f64,
         parent: Option<WindowId>,
     ) -> Self {
@@ -241,6 +245,7 @@ impl WindowState {
             cursor_visible: true,
             decorate: true,
             prefer_csd,
+            csd_fallback,
             fractional_scale,
             frame: None,
             frame_callback_state: FrameCallbackState::None,
@@ -279,6 +284,16 @@ impl WindowState {
 
     pub(crate) fn xdg_toplevel(&self) -> Option<&xdg_toplevel::XdgToplevel> {
         self.window.xdg_toplevel()
+    }
+
+    /// Whether the compositor has suspended the window, as of the last configure.
+    pub(crate) fn is_suspended(&self) -> bool {
+        match &self.window {
+            WindowType::Window { last_configure, .. } => last_configure
+                .as_ref()
+                .is_some_and(|configure| configure.state.contains(XdgWindowState::SUSPENDED)),
+            _ => false,
+        }
     }
 
     #[inline]

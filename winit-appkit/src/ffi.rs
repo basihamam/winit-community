@@ -24,6 +24,8 @@ unsafe extern "C" {
     pub fn CGDisplayCreateUUIDFromDisplayID(display: CGDirectDisplayID) -> *mut CFUUID;
 
     pub fn CGDisplayGetDisplayIDFromUUID(uuid: &CFUUID) -> CGDirectDisplayID;
+
+    pub fn CGDisplayScreenSize(display: CGDirectDisplayID) -> objc2_core_foundation::CGSize;
 }
 
 #[repr(transparent)]

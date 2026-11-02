@@ -52,6 +52,17 @@ impl PartialEq for MonitorHandle {
 
 impl Eq for MonitorHandle {}
 
+impl MonitorHandle {
+    /// Returns physical size of monitor in millimeters, where the
+    /// first field of a tuple is width and the second is height.
+    ///
+    /// Returns `None` if the size of the monitor could not be determined.
+    #[inline]
+    pub fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        self.0.physical_size()
+    }
+}
+
 /// Provider of the [`MonitorHandle`].
 pub trait MonitorHandleProvider: Any + fmt::Debug + Send + Sync {
     /// Identifier for this monitor.
@@ -108,6 +119,14 @@ pub trait MonitorHandleProvider: Any + fmt::Debug + Send + Sync {
 
     /// Returns all fullscreen video modes supported by this monitor.
     fn video_modes(&self) -> Box<dyn Iterator<Item = VideoMode>>;
+
+    /// Returns physical size of monitor in millimeters, where the
+    /// first field of a tuple is width and the second is height.
+    ///
+    /// Returns `None` if the size of the monitor could not be determined.
+    fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        None
+    }
 }
 
 impl PartialEq for dyn MonitorHandleProvider + '_ {

@@ -6,10 +6,11 @@ use std::{io, iter, mem, ptr};
 use dpi::{PhysicalPosition, PhysicalSize};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
 use windows_sys::Win32::Graphics::Gdi::{
-    DEVMODEW, DM_BITSPERPEL, DM_DISPLAYFREQUENCY, DM_PELSHEIGHT, DM_PELSWIDTH,
-    ENUM_CURRENT_SETTINGS, EnumDisplayMonitors, EnumDisplaySettingsExW, GetMonitorInfoW, HDC,
-    HMONITOR, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MONITORINFOEXW,
-    MonitorFromPoint, MonitorFromWindow,
+    CreateDCW, DeleteDC, GetDeviceCaps, DEVMODEW, DMDO_90, DMDO_270, DM_BITSPERPEL,
+    DM_DISPLAYFREQUENCY, DM_PELSHEIGHT, DM_PELSWIDTH, ENUM_CURRENT_SETTINGS, EnumDisplayMonitors,
+    EnumDisplaySettingsExW, GetMonitorInfoW, HDC, HMONITOR, HORZSIZE, MONITOR_DEFAULTTONEAREST,
+    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MONITORINFOEXW, MonitorFromPoint, MonitorFromWindow,
+    VERTSIZE,
 };
 use windows_sys::core::BOOL;
 use winit_core::monitor::{MonitorHandleProvider, VideoMode};
@@ -214,5 +215,47 @@ impl MonitorHandleProvider for MonitorHandle {
 
     fn video_modes(&self) -> Box<dyn Iterator<Item = VideoMode>> {
         Box::new(self.video_mode_handles().map(|mode| mode.mode))
+    }
+
+    fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        let monitor_info = get_monitor_info(self.0).ok()?;
+        let hdc = unsafe {
+            CreateDCW(
+                monitor_info.szDevice.as_ptr(),
+                ptr::null(),
+                ptr::null(),
+                ptr::null(),
+            )
+        };
+        if hdc.is_null() {
+            return None;
+        }
+        let width = unsafe { GetDeviceCaps(hdc, HORZSIZE) };
+        let height = unsafe { GetDeviceCaps(hdc, VERTSIZE) };
+        unsafe { DeleteDC(hdc) };
+
+        let mut physical_size = (width > 0 && height > 0)
+            .then(|| Some((NonZeroU32::new(width as u32)?, NonZeroU32::new(height as u32)?)))
+            .flatten();
+
+        let mut dev_mode_w: DEVMODEW = unsafe { mem::zeroed() };
+        dev_mode_w.dmSize = mem::size_of_val(&dev_mode_w) as u16;
+        if unsafe {
+            EnumDisplaySettingsExW(
+                monitor_info.szDevice.as_ptr(),
+                ENUM_CURRENT_SETTINGS,
+                &mut dev_mode_w,
+                0,
+            )
+        } != false.into()
+        {
+            if matches!(
+                unsafe { dev_mode_w.Anonymous1.Anonymous2.dmDisplayOrientation },
+                DMDO_90 | DMDO_270
+            ) {
+                physical_size = physical_size.map(|(w, h)| (h, w));
+            }
+        }
+        physical_size
     }
 }

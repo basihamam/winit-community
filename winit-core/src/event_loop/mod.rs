@@ -176,7 +176,8 @@ pub trait ActiveEventLoop: Any + fmt::Debug {
     ///
     /// ## Platform-specific
     ///
-    /// - **iOS / Android / Wayland / x11 / Orbital:** Unsupported.
+    /// - **Wayland / x11:** Detected via the XDG desktop portal (`org.freedesktop.portal.Settings`).
+    /// - **Android / Orbital:** Unsupported.
     fn system_theme(&self) -> Option<Theme>;
 
     /// Sets the [`ControlFlow`].

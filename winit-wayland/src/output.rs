@@ -70,6 +70,14 @@ impl CoreMonitorHandle for MonitorHandle {
 
         Box::new(modes.into_iter().map(wayland_mode_to_core_mode))
     }
+
+    fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        let output_data = self.proxy.data::<OutputData>().unwrap();
+        output_data.with_output_info(|info| {
+            let (w, h) = info.physical_size;
+            Some((NonZeroU32::new(w as u32)?, NonZeroU32::new(h as u32)?))
+        })
+    }
 }
 
 impl PartialEq for MonitorHandle {

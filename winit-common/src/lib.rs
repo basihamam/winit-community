@@ -13,3 +13,5 @@ pub mod positioner;
 pub mod text;
 #[cfg(feature = "xkb")]
 pub mod xkb;
+#[cfg(any(feature = "wayland", feature = "x11"))]
+pub mod theme;

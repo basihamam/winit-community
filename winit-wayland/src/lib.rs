@@ -105,11 +105,23 @@ pub(crate) struct ApplicationName {
 }
 
 /// Window attributes methods specific to Wayland.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WindowAttributesWayland {
     pub(crate) name: Option<ApplicationName>,
     pub(crate) activation_token: Option<ActivationToken>,
     pub(crate) prefer_csd: bool,
+    pub(crate) csd_fallback: bool,
+}
+
+impl Default for WindowAttributesWayland {
+    fn default() -> Self {
+        Self {
+            name: None,
+            activation_token: None,
+            prefer_csd: false,
+            csd_fallback: true,
+        }
+    }
 }
 
 impl WindowAttributesWayland {
@@ -146,6 +158,19 @@ impl WindowAttributesWayland {
     #[inline]
     pub fn with_prefer_csd(mut self, prefer_csd: bool) -> Self {
         self.prefer_csd = prefer_csd;
+        self
+    }
+
+    /// Whether to draw a client-side decoration frame when the compositor
+    /// declines server-side decoration.
+    ///
+    /// When set to `false`, winit will not render its fallback frame if the compositor
+    /// tells the window to draw client-side decorations.
+    ///
+    /// Defaults to `true`.
+    #[inline]
+    pub fn with_csd_fallback(mut self, csd_fallback: bool) -> Self {
+        self.csd_fallback = csd_fallback;
         self
     }
 }

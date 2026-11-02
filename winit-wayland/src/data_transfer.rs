@@ -193,6 +193,8 @@ impl MimeType {
                         Some(TypeHint::Plaintext)
                     } else if parsed.subtype() == mime::HTML {
                         Some(TypeHint::Html)
+                    } else if parsed.subtype() == "uri-list" {
+                        Some(TypeHint::UriList)
                     } else {
                         Some(TypeHint::Plaintext)
                     }
@@ -1428,5 +1430,14 @@ mod tests {
         let mime = MimeType::parse("text/plain;charset=iso-8859-1".to_string());
         assert_eq!(mime.hint(), None);
         assert!(mime.parse_charset().is_err());
+    }
+
+    #[test]
+    fn test_mime_type_uri_list() {
+        let mime = MimeType::parse("text/uri-list".to_string());
+        assert_eq!(mime.hint(), Some(TypeHint::UriList));
+
+        let mime_with_params = MimeType::parse("text/uri-list;charset=utf-8".to_string());
+        assert_eq!(mime_with_params.hint(), Some(TypeHint::UriList));
     }
 }
