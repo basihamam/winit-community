@@ -1803,6 +1803,11 @@ impl UnownedWindow {
     }
 
     #[inline]
+    pub fn is_minimizable(&self) -> bool {
+        self.enabled_buttons().contains(WindowButtons::MINIMIZE)
+    }
+
+    #[inline]
     pub fn set_enabled_buttons(&self, _buttons: WindowButtons) {}
 
     #[inline]

@@ -1562,6 +1562,11 @@ impl WindowDelegate {
     }
 
     #[inline]
+    pub fn is_minimizable(&self) -> bool {
+        self.enabled_buttons().contains(WindowButtons::MINIMIZE)
+    }
+
+    #[inline]
     pub fn set_enabled_buttons(&self, buttons: WindowButtons) {
         let mut mask = self.window().styleMask();
 

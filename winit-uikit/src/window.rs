@@ -255,6 +255,10 @@ impl Inner {
         false
     }
 
+    pub fn is_minimizable(&self) -> bool {
+        false
+    }
+
     #[inline]
     pub fn set_enabled_buttons(&self, _buttons: WindowButtons) {
         warn!("`Window::set_enabled_buttons` is ignored on iOS");
@@ -710,6 +714,10 @@ impl CoreWindow for Window {
 
     fn is_resizable(&self) -> bool {
         self.maybe_wait_on_main(|delegate| delegate.is_resizable())
+    }
+
+    fn is_minimizable(&self) -> bool {
+        self.maybe_wait_on_main(|delegate| delegate.is_minimizable())
     }
 
     fn set_enabled_buttons(&self, buttons: WindowButtons) {

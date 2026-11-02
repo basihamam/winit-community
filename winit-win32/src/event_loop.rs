@@ -2100,7 +2100,8 @@ unsafe fn public_window_callback_inner(
                 // see https://devblogs.microsoft.com/oldnewthing/20031001-00/?p=42343
                 // and http://debugandconquer.blogspot.com/2015/08/the-cause-of-spurious-mouse-move.html
                 let mut w = userdata.window_state_lock();
-                cursor_moved = w.mouse.last_position != Some(position);
+                let is_locked = w.mouse.cursor_flags().contains(CursorFlags::LOCKED);
+                cursor_moved = !is_locked && w.mouse.last_position != Some(position);
                 w.mouse.last_position = Some(position);
             }
 

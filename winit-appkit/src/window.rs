@@ -208,6 +208,10 @@ impl CoreWindow for Window {
         self.maybe_wait_on_main(|delegate| delegate.is_resizable())
     }
 
+    fn is_minimizable(&self) -> bool {
+        self.maybe_wait_on_main(|delegate| delegate.is_minimizable())
+    }
+
     fn set_enabled_buttons(&self, buttons: WindowButtons) {
         self.maybe_wait_on_main(|delegate| delegate.set_enabled_buttons(buttons))
     }

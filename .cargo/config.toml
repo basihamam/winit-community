@@ -7,3 +7,16 @@ rustflags = ["--cfg=unreleased_changelogs"]
 
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
+
+[target.aarch64-linux-android]
+rustflags = ["--cfg=unreleased_changelogs", "-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]
+
+[target.armv7-linux-androideabi]
+rustflags = ["--cfg=unreleased_changelogs", "-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["--cfg=unreleased_changelogs", "-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]
+
+[target.i686-linux-android]
+rustflags = ["--cfg=unreleased_changelogs", "-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]
+

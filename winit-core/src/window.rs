@@ -1133,6 +1133,18 @@ pub trait Window: Any + Send + Sync + fmt::Debug {
     /// - **iOS / Android / Web:** Unsupported.
     fn is_resizable(&self) -> bool;
 
+    /// Gets whether the window is minimizable.
+    ///
+    /// By default this checks whether [`WindowButtons::MINIMIZE`] is included in [`Window::enabled_buttons`].
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **Wayland / X11 / Orbital:** Not implemented. Always returns `true`.
+    /// - **Web / iOS / Android:** Unsupported. Always returns `true`.
+    fn is_minimizable(&self) -> bool {
+        self.enabled_buttons().contains(WindowButtons::MINIMIZE)
+    }
+
     /// Sets the enabled window buttons.
     ///
     /// ## Platform-specific
