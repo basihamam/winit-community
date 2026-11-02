@@ -440,7 +440,7 @@ pub struct UnownedWindow {
     screen_id: i32, // never changes
     sync_counter_id: Option<NonZeroU32>, // never changes
     selected_cursor: Mutex<SelectedCursor>,
-    cursor_grabbed_mode: Mutex<CursorGrabMode>,
+    pub(crate) cursor_grabbed_mode: Mutex<CursorGrabMode>,
     #[allow(clippy::mutex_atomic)]
     cursor_visible: Mutex<bool>,
     ime_sender: Mutex<ImeSender>,
@@ -1954,6 +1954,15 @@ impl UnownedWindow {
         }
 
         result
+    }
+
+    pub(crate) fn ungrab_cursor_if_confined(&self) {
+        let mut grabbed_lock = self.cursor_grabbed_mode.lock().unwrap();
+        if *grabbed_lock == CursorGrabMode::Confined {
+            let _ = self.xconn.xcb_connection().ungrab_pointer(x11rb::CURRENT_TIME);
+            let _ = self.xconn.flush_requests();
+            *grabbed_lock = CursorGrabMode::None;
+        }
     }
 
     #[inline]

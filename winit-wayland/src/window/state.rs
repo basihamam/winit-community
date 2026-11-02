@@ -118,7 +118,7 @@ pub struct WindowState {
     compositor: Arc<CompositorState>,
 
     /// The current cursor grabbing mode.
-    cursor_grab_mode: GrabState,
+    pub(crate) cursor_grab_mode: GrabState,
 
     /// The input method properties provided by the application to the IME.
     ///

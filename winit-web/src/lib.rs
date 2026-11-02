@@ -150,6 +150,12 @@ pub trait WindowExtWeb {
     ///
     /// [`CursorGrabMode::Locked`]: crate::window::CursorGrabMode::Locked
     fn is_cursor_lock_raw(&self) -> bool;
+
+    /// Returns whether the canvas element currently has a `tabindex` and is focusable.
+    fn is_focusable(&self) -> bool;
+
+    /// Dynamically sets or removes the `tabindex` attribute on the canvas element.
+    fn set_focusable(&self, focusable: bool);
 }
 
 impl WindowExtWeb for dyn Window + '_ {
@@ -170,6 +176,16 @@ impl WindowExtWeb for dyn Window + '_ {
 
     fn is_cursor_lock_raw(&self) -> bool {
         self.cast_ref::<WebWindow>().expect("non Web window on Web").is_cursor_lock_raw()
+    }
+
+    fn is_focusable(&self) -> bool {
+        self.cast_ref::<WebWindow>().expect("non Web window on Web").is_focusable()
+    }
+
+    fn set_focusable(&self, focusable: bool) {
+        self.cast_ref::<WebWindow>()
+            .expect("non Web window on Web")
+            .set_focusable(focusable)
     }
 }
 

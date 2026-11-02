@@ -1560,6 +1560,10 @@ impl EventProcessor {
             return;
         }
 
+        self.with_window(window, |w| {
+            w.ungrab_cursor_if_confined();
+        });
+
         if let Some(ime) = self.target.ime.as_ref() {
             ime.borrow_mut().unfocus(xev.event).expect("Failed to unfocus input context");
         }

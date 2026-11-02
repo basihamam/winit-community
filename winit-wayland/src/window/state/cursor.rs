@@ -51,6 +51,16 @@ impl WindowState {
         }
 
         self.pointers = new_pointers;
+        if self.cursor_grab_mode.current_grab_mode == CursorGrabMode::Confined {
+            self.cursor_grab_mode.current_grab_mode = CursorGrabMode::None;
+        }
+    }
+
+    /// Refresh cursor confinement when the surface is resized.
+    pub fn refresh_cursor_confinement(&mut self) {
+        if self.cursor_grab_mode.user_grab_mode == CursorGrabMode::Confined {
+            let _ = self.set_cursor_grab_inner(CursorGrabMode::Confined);
+        }
     }
 
     /// Reload the cursor style on the given window.
@@ -160,7 +170,7 @@ impl WindowState {
     }
 
     /// Set the grabbing state on the surface.
-    fn set_cursor_grab_inner(&mut self, mode: CursorGrabMode) -> Result<(), RequestError> {
+    pub(crate) fn set_cursor_grab_inner(&mut self, mode: CursorGrabMode) -> Result<(), RequestError> {
         let pointer_constraints = match self.pointer_constraints.as_ref() {
             Some(pointer_constraints) => pointer_constraints,
             None if mode == CursorGrabMode::None => return Ok(()),

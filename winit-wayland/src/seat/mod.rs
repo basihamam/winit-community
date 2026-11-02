@@ -86,6 +86,9 @@ pub struct WinitSeatState {
     /// Written by both keyboard and pointer handlers through a shared reference,
     /// so interior mutability is required.
     pub(crate) latest_input_serial: Cell<Option<u32>>,
+
+    /// Whether an IME commit was received during the current text input frame.
+    pub(crate) ime_committed_this_frame: bool,
 }
 
 impl WinitSeatState {

@@ -420,9 +420,10 @@ impl EventLoop {
             if compositor_update.resized || compositor_update.scale_changed {
                 let physical_size = self.with_state(|state| {
                     let windows = state.windows.get_mut();
-                    let window = windows.get(&window_id).unwrap().lock().unwrap();
+                    let mut window = windows.get(&window_id).unwrap().lock().unwrap();
 
                     let size = window.surface_size_physical();
+                    window.refresh_cursor_confinement();
 
                     // Mark the window as needed a redraw.
                     state

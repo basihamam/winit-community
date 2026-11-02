@@ -106,6 +106,14 @@ impl Window {
             lock::is_cursor_lock_raw(inner.canvas.navigator(), inner.canvas.document())
         })
     }
+
+    pub fn is_focusable(&self) -> bool {
+        self.inner.queue(|inner| inner.canvas.is_focusable())
+    }
+
+    pub fn set_focusable(&self, focusable: bool) {
+        self.inner.dispatch(move |inner| inner.canvas.set_focusable(focusable))
+    }
 }
 
 impl RootWindow for Window {

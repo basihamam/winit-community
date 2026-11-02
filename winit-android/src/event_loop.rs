@@ -861,11 +861,11 @@ impl RootActiveEventLoop for ActiveEventLoop {
     }
 
     fn available_monitors(&self) -> Box<dyn Iterator<Item = CoreMonitorHandle>> {
-        Box::new(std::iter::empty())
+        Box::new(self.primary_monitor().into_iter())
     }
 
     fn primary_monitor(&self) -> Option<CoreMonitorHandle> {
-        None
+        Some(CoreMonitorHandle(std::sync::Arc::new(crate::monitor::MonitorHandle::new(self.app.clone()))))
     }
 
     fn system_theme(&self) -> Option<Theme> {
@@ -1020,15 +1020,15 @@ impl CoreWindow for Window {
     }
 
     fn primary_monitor(&self) -> Option<CoreMonitorHandle> {
-        None
+        Some(CoreMonitorHandle(std::sync::Arc::new(crate::monitor::MonitorHandle::new(self.app.clone()))))
     }
 
     fn available_monitors(&self) -> Box<dyn Iterator<Item = CoreMonitorHandle>> {
-        Box::new(std::iter::empty())
+        Box::new(self.primary_monitor().into_iter())
     }
 
     fn current_monitor(&self) -> Option<CoreMonitorHandle> {
-        None
+        self.primary_monitor()
     }
 
     fn scale_factor(&self) -> f64 {

@@ -2364,9 +2364,11 @@ impl WindowExtMacOS for WindowDelegate {
         } else {
             let new_mask = self.saved_style();
             self.ivars().is_simple_fullscreen.set(false);
+            self.set_style_mask(new_mask);
 
             let save_presentation_opts = self.ivars().save_presentation_opts.get();
-            let frame = self.ivars().standard_frame.get().unwrap_or(DEFAULT_STANDARD_FRAME);
+            let content_frame = self.ivars().standard_frame.get().unwrap_or(DEFAULT_STANDARD_FRAME);
+            let frame = self.window().frameRectForContentRect(content_frame);
 
             if let Some(presentation_opts) = save_presentation_opts {
                 app.setPresentationOptions(presentation_opts);
@@ -2383,7 +2385,6 @@ impl WindowExtMacOS for WindowDelegate {
 
             self.window().setFrame_display(frame, true);
             self.window().setMovable(true);
-            self.set_style_mask(new_mask);
         }
 
         true

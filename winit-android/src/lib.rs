@@ -75,6 +75,7 @@
 mod event_loop;
 mod ime;
 mod keycodes;
+pub mod monitor;
 
 use winit_core::event_loop::ActiveEventLoop as CoreActiveEventLoop;
 use winit_core::window::Window as CoreWindow;

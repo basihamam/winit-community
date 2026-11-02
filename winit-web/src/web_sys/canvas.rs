@@ -257,6 +257,19 @@ impl Canvas {
         &self.common.style
     }
 
+    #[inline]
+    pub fn is_focusable(&self) -> bool {
+        self.raw().has_attribute("tabindex")
+    }
+
+    pub fn set_focusable(&self, focusable: bool) {
+        if focusable {
+            let _ = self.raw().set_attribute("tabindex", "0");
+        } else {
+            let _ = self.raw().remove_attribute("tabindex");
+        }
+    }
+
     pub fn on_touch_start(&self) {
         let prevent_default = Rc::clone(&self.prevent_default);
         self.handlers.borrow_mut().on_touch_start =

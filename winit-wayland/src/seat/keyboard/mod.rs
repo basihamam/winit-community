@@ -13,7 +13,7 @@ use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 use tracing::warn;
 use winit_common::xkb::Context;
 use winit_core::event::{ElementState, WindowEvent};
-use winit_core::keyboard::ModifiersState;
+use winit_core::keyboard::{Key, ModifiersState, NamedKey};
 
 use crate::WindowId;
 use crate::event_loop::sink::EventSink;
@@ -140,6 +140,7 @@ impl Dispatch<WlKeyboard, KeyboardData, WinitState> for WinitState {
                 }
                 let key = key + 8;
                 key_input(
+                    &mut seat_state.ime_committed_this_frame,
                     keyboard_state,
                     &mut state.events_sink,
                     data,
@@ -194,6 +195,7 @@ impl Dispatch<WlKeyboard, KeyboardData, WinitState> for WinitState {
                         };
 
                         key_input(
+                            &mut seat_state.ime_committed_this_frame,
                             keyboard_state,
                             &mut state.events_sink,
                             data,
@@ -217,6 +219,7 @@ impl Dispatch<WlKeyboard, KeyboardData, WinitState> for WinitState {
                 let key = key + 8;
 
                 key_input(
+                    &mut seat_state.ime_committed_this_frame,
                     keyboard_state,
                     &mut state.events_sink,
                     data,
@@ -369,6 +372,7 @@ impl KeyboardData {
 }
 
 fn key_input(
+    ime_committed: &mut bool,
     keyboard_state: &mut KeyboardState,
     event_sink: &mut EventSink,
     data: &KeyboardData,
@@ -383,6 +387,10 @@ fn key_input(
 
     if let Some(mut key_context) = keyboard_state.xkb_context.key_context() {
         let event = key_context.process_key_event(keycode, state, repeat);
+        if *ime_committed && event.logical_key == Key::Named(NamedKey::Enter) {
+            *ime_committed = false;
+            return;
+        }
         let event = WindowEvent::KeyboardInput { device_id: None, event, is_synthetic: false };
         event_sink.push_window_event(event, window_id);
     }

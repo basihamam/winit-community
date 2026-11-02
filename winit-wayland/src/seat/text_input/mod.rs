@@ -117,6 +117,9 @@ impl Dispatch<ZwpTextInputV3, TextInputData, WinitState> for TextInputState {
             TextInputEvent::CommitString { text } => {
                 text_input_data.pending_preedit = None;
                 text_input_data.pending_commit = text;
+                for seat in state.seats.values_mut() {
+                    seat.ime_committed_this_frame = true;
+                }
             },
             TextInputEvent::DeleteSurroundingText { before_length, after_length } => {
                 text_input_data.pending_delete = Some(DeleteSurroundingText {
