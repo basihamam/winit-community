@@ -368,6 +368,11 @@ impl winit_wayland::EventLoopExtWayland for EventLoop {
     fn is_wayland(&self) -> bool {
         self.event_loop.is_wayland()
     }
+
+    #[inline]
+    fn main_drm_device(&self) -> Option<libc::dev_t> {
+        self.event_loop.main_drm_device()
+    }
 }
 
 #[cfg(wayland_platform)]

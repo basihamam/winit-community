@@ -56,6 +56,10 @@ pub use self::window::Window;
 pub trait ActiveEventLoopExtWayland {
     /// True if the [`ActiveEventLoop`] uses Wayland.
     fn is_wayland(&self) -> bool;
+
+    /// Returns the main DRM device preferred by the compositor for direct scanout,
+    /// or `None` if not available.
+    fn main_drm_device(&self) -> Option<libc::dev_t>;
 }
 
 impl ActiveEventLoopExtWayland for dyn CoreActiveEventLoop + '_ {
@@ -63,12 +67,21 @@ impl ActiveEventLoopExtWayland for dyn CoreActiveEventLoop + '_ {
     fn is_wayland(&self) -> bool {
         self.cast_ref::<ActiveEventLoop>().is_some()
     }
+
+    #[inline]
+    fn main_drm_device(&self) -> Option<libc::dev_t> {
+        self.cast_ref::<ActiveEventLoop>().and_then(|el| el.main_drm_device())
+    }
 }
 
 /// Additional methods on [`EventLoop`] that are specific to Wayland.
 pub trait EventLoopExtWayland {
     /// True if the [`EventLoop`] uses Wayland.
     fn is_wayland(&self) -> bool;
+
+    /// Returns the main DRM device preferred by the compositor for direct scanout,
+    /// or `None` if not available.
+    fn main_drm_device(&self) -> Option<libc::dev_t>;
 }
 
 /// Additional methods when building event loop that are specific to Wayland.

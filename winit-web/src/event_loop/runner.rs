@@ -158,6 +158,7 @@ impl Runner {
             Event::Suspended => self.app.suspended(&self.event_loop),
             Event::Resumed => self.app.resumed(&self.event_loop),
             Event::CreateSurfaces => self.app.can_create_surfaces(&self.event_loop),
+            Event::DestroySurfaces => self.app.destroy_surfaces(&self.event_loop),
             Event::AboutToWait => self.app.about_to_wait(&self.event_loop),
         }
     }
@@ -640,10 +641,7 @@ impl Shared {
     fn handle_unload(&self) {
         self.exit();
         self.apply_control_flow();
-        // We don't call `handle_loop_destroyed` here because we don't need to
-        // perform cleanup when the Web browser is going to destroy the page.
-        //
-        // We do want to run the application handler's `Drop` impl.
+        self.run_until_cleared([Event::DestroySurfaces].into_iter());
         *self.0.runner.borrow_mut() = RunnerEnum::Destroyed;
     }
 
@@ -742,6 +740,7 @@ impl Shared {
     }
 
     fn handle_loop_destroyed(&self) {
+        self.run_until_cleared([Event::DestroySurfaces].into_iter());
         let all_canvases = std::mem::take(&mut *self.0.all_canvases.borrow_mut());
         *self.0.page_transition_event_handle.borrow_mut() = None;
         *self.0.on_mouse_move.borrow_mut() = None;
@@ -852,6 +851,11 @@ impl Shared {
     pub(crate) fn safe_area(&self) -> &Rc<SafeAreaHandle> {
         &self.0.safe_area
     }
+
+    #[allow(dead_code)]
+    pub fn destroy(&self) {
+        self.handle_loop_destroyed();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -871,6 +875,7 @@ pub(crate) enum Event {
     DeviceEvent { device_id: Option<DeviceId>, event: DeviceEvent },
     Suspended,
     CreateSurfaces,
+    DestroySurfaces,
     Resumed,
     AboutToWait,
     UserWakeUp,

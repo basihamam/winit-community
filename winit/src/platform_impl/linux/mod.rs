@@ -151,6 +151,17 @@ impl EventLoop {
         }
     }
 
+    #[inline]
+    #[allow(dead_code)]
+    pub fn main_drm_device(&self) -> Option<libc::dev_t> {
+        match *self {
+            #[cfg(wayland_platform)]
+            EventLoop::Wayland(ref evlp) => evlp.main_drm_device(),
+            #[cfg(x11_platform)]
+            _ => None,
+        }
+    }
+
     pub fn run_app_on_demand<A: ApplicationHandler>(
         &mut self,
         app: A,

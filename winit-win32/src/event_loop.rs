@@ -1501,7 +1501,8 @@ unsafe fn public_window_callback_inner(
 
             let params = unsafe { &mut *(lparam as *mut NCCALCSIZE_PARAMS) };
 
-            if util::is_maximized(window) {
+            let is_fullscreen = userdata.window_state_lock().fullscreen.is_some();
+            if util::is_maximized(window) && !is_fullscreen {
                 // Limit the window size when maximized to the current monitor.
                 // Otherwise it would include the non-existent decorations.
                 //
@@ -1511,6 +1512,11 @@ unsafe fn public_window_callback_inner(
                 let monitor = unsafe { MonitorFromRect(&params.rgrc[0], MONITOR_DEFAULTTONULL) };
                 if let Ok(monitor_info) = monitor::get_monitor_info(monitor) {
                     params.rgrc[0] = monitor_info.monitorInfo.rcWork;
+                }
+            } else if is_fullscreen {
+                let monitor = unsafe { MonitorFromRect(&params.rgrc[0], MONITOR_DEFAULTTONULL) };
+                if let Ok(monitor_info) = monitor::get_monitor_info(monitor) {
+                    params.rgrc[0] = monitor_info.monitorInfo.rcMonitor;
                 }
             } else if window_flags.contains(WindowFlags::MARKER_UNDECORATED_SHADOW) {
                 // Extend the client area to cover the whole non-client area.

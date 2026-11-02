@@ -42,3 +42,5 @@ pub use winit_x11 as x11;
 pub mod scancode;
 #[cfg(any(x11_platform, wayland_platform, docsrs))]
 pub mod startup_notify;
+#[cfg(any(wayland_platform, docsrs))]
+pub mod drm;

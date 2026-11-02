@@ -83,9 +83,7 @@ pub struct EventProcessor {
 }
 
 impl EventProcessor {
-    pub(crate) fn process_event(&mut self, xev: &mut XEvent, app: &mut dyn ApplicationHandler) {
-        self.process_xevent(xev, app);
-
+    pub(crate) fn drain_ime_requests(&mut self) {
         // Handle IME requests.
         let mut ime_focus = None;
         while let Ok(request) = self.ime_receiver.try_recv() {
@@ -118,6 +116,10 @@ impl EventProcessor {
         if let (Some(window_id), Some(ime)) = (ime_focus, self.target.ime.as_mut()) {
             let _ = ime.get_mut().focus(window_id);
         }
+    }
+
+    pub(crate) fn process_event(&mut self, xev: &mut XEvent, app: &mut dyn ApplicationHandler) {
+        self.process_xevent(xev, app);
 
         // Drain IME events.
         while let Ok((window, event)) = self.ime_event_receiver.try_recv() {

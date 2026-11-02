@@ -27,8 +27,9 @@ use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_ring_v2::ZwpTable
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2;
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2;
 use winit_core::event::{
-    ButtonSource, ElementState, Force, PointerKind, PointerSource, TabletToolButton,
-    TabletToolData as CoreTabletToolData, TabletToolKind, TabletToolTilt, WindowEvent,
+    ButtonSource, DeviceEvent, ElementState, Force, MouseScrollDelta, PointerKind, PointerSource,
+    ScrollSource, TabletToolButton, TabletToolData as CoreTabletToolData, TabletToolKind,
+    TabletToolTilt, TouchPhase, WindowEvent,
 };
 
 use crate::state::WinitState;
@@ -323,12 +324,21 @@ impl Dispatch2<ZwpTabletPadV2, WinitState> for () {
 
     fn event(
         &self,
-        _: &mut WinitState,
+        state: &mut WinitState,
         _: &ZwpTabletPadV2,
-        _: <ZwpTabletPadV2 as Proxy>::Event,
+        event: <ZwpTabletPadV2 as Proxy>::Event,
         _: &Connection,
         _: &QueueHandle<WinitState>,
     ) {
+        match event {
+            zwp_tablet_pad_v2::Event::Enter { surface, .. } => {
+                state.tablet_pad_surface = Some(surface);
+            },
+            zwp_tablet_pad_v2::Event::Leave { .. } => {
+                state.tablet_pad_surface = None;
+            },
+            _ => (),
+        }
     }
 }
 
@@ -353,24 +363,102 @@ impl Dispatch2<ZwpTabletPadGroupV2, WinitState> for () {
 impl Dispatch2<ZwpTabletPadRingV2, WinitState> for () {
     fn event(
         &self,
-        _: &mut WinitState,
+        state: &mut WinitState,
         _: &ZwpTabletPadRingV2,
-        _: <ZwpTabletPadRingV2 as Proxy>::Event,
+        event: <ZwpTabletPadRingV2 as Proxy>::Event,
         _: &Connection,
         _: &QueueHandle<WinitState>,
     ) {
+        use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_ring_v2::Event as RingEvent;
+        match event {
+            RingEvent::Angle { degrees } => {
+                let delta = MouseScrollDelta::LineDelta(0.0, (degrees as f32) / 15.0);
+                let target_window_id = state
+                    .tablet_pad_surface
+                    .as_ref()
+                    .map(crate::make_wid)
+                    .or_else(|| state.windows.borrow().keys().next().copied());
+                if let Some(window_id) = target_window_id {
+                    let window_event = WindowEvent::MouseWheel {
+                        device_id: None,
+                        delta,
+                        phase: TouchPhase::Moved,
+                        source: ScrollSource::Finger,
+                    };
+                    state.events_sink.push_window_event(window_event, window_id);
+                }
+                state.events_sink.push_device_event(DeviceEvent::MouseWheel { delta });
+            },
+            RingEvent::Stop => {
+                let delta = MouseScrollDelta::LineDelta(0.0, 0.0);
+                let target_window_id = state
+                    .tablet_pad_surface
+                    .as_ref()
+                    .map(crate::make_wid)
+                    .or_else(|| state.windows.borrow().keys().next().copied());
+                if let Some(window_id) = target_window_id {
+                    let window_event = WindowEvent::MouseWheel {
+                        device_id: None,
+                        delta,
+                        phase: TouchPhase::Ended,
+                        source: ScrollSource::Finger,
+                    };
+                    state.events_sink.push_window_event(window_event, window_id);
+                }
+            },
+            _ => {},
+        }
     }
 }
 
 impl Dispatch2<ZwpTabletPadStripV2, WinitState> for () {
     fn event(
         &self,
-        _: &mut WinitState,
+        state: &mut WinitState,
         _: &ZwpTabletPadStripV2,
-        _: <ZwpTabletPadStripV2 as Proxy>::Event,
+        event: <ZwpTabletPadStripV2 as Proxy>::Event,
         _: &Connection,
         _: &QueueHandle<WinitState>,
     ) {
+        use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_strip_v2::Event as StripEvent;
+        match event {
+            StripEvent::Position { position } => {
+                let delta = MouseScrollDelta::LineDelta(0.0, position as f32);
+                let target_window_id = state
+                    .tablet_pad_surface
+                    .as_ref()
+                    .map(crate::make_wid)
+                    .or_else(|| state.windows.borrow().keys().next().copied());
+                if let Some(window_id) = target_window_id {
+                    let window_event = WindowEvent::MouseWheel {
+                        device_id: None,
+                        delta,
+                        phase: TouchPhase::Moved,
+                        source: ScrollSource::Finger,
+                    };
+                    state.events_sink.push_window_event(window_event, window_id);
+                }
+                state.events_sink.push_device_event(DeviceEvent::MouseWheel { delta });
+            },
+            StripEvent::Stop => {
+                let delta = MouseScrollDelta::LineDelta(0.0, 0.0);
+                let target_window_id = state
+                    .tablet_pad_surface
+                    .as_ref()
+                    .map(crate::make_wid)
+                    .or_else(|| state.windows.borrow().keys().next().copied());
+                if let Some(window_id) = target_window_id {
+                    let window_event = WindowEvent::MouseWheel {
+                        device_id: None,
+                        delta,
+                        phase: TouchPhase::Ended,
+                        source: ScrollSource::Finger,
+                    };
+                    state.events_sink.push_window_event(window_event, window_id);
+                }
+            },
+            _ => {},
+        }
     }
 }
 

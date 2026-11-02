@@ -582,6 +582,12 @@ impl Canvas {
     }
 }
 
+impl Drop for Canvas {
+    fn drop(&mut self) {
+        self.remove_listeners();
+    }
+}
+
 impl Common {
     pub fn add_event<E, F>(
         &self,

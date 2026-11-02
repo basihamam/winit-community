@@ -201,6 +201,10 @@ impl EventLoop {
         exit
     }
 
+    pub fn main_drm_device(&self) -> Option<libc::dev_t> {
+        self.active_event_loop.main_drm_device()
+    }
+
     pub fn pump_app_events<A: ApplicationHandler>(
         &mut self,
         timeout: Option<Duration>,
@@ -857,6 +861,10 @@ impl PrimarySelectionExt for ActiveEventLoop {
 }
 
 impl ActiveEventLoop {
+    pub fn main_drm_device(&self) -> Option<libc::dev_t> {
+        self.state.borrow().main_drm_device
+    }
+
     fn clear_exit(&self) {
         self.exit.set(None)
     }

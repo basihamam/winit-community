@@ -39,6 +39,7 @@ use crate::types::wp_tablet_input_v2::TabletManager;
 use crate::types::wp_viewporter::ViewporterState;
 use crate::types::xdg_activation::XdgActivationState;
 use crate::types::xdg_toplevel_icon_manager::XdgToplevelIconManagerState;
+use crate::types::zwp_linux_dmabuf::DmabufFeedbackManager;
 use crate::window::WindowState;
 use crate::window::handles::WindowRequests;
 
@@ -129,6 +130,15 @@ pub struct WinitState {
 
     /// Blur manager.
     pub blur_manager: Option<BgrEffectManager>,
+
+    /// Dmabuf feedback manager.
+    pub dmabuf_feedback: Option<DmabufFeedbackManager>,
+
+    /// Main DRM device for direct scanout feedback.
+    pub main_drm_device: Option<libc::dev_t>,
+
+    /// Surface currently focused by tablet pad.
+    pub tablet_pad_surface: Option<WlSurface>,
 
     /// Drag-and-drop and clipboard state.
     pub data_transfer_state: DataTransferState,
@@ -223,6 +233,9 @@ impl WinitState {
             primary_selection_manager_state,
             fractional_scaling_manager,
             blur_manager: BgrEffectManager::new(globals, queue_handle).ok(),
+            dmabuf_feedback: DmabufFeedbackManager::new(globals, queue_handle).ok(),
+            main_drm_device: None,
+            tablet_pad_surface: None,
 
             data_transfer_state: Default::default(),
 

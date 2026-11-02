@@ -654,6 +654,8 @@ impl EventLoop {
         while let Some(xev) = self.event_processor.poll_one_event(&mut xev) {
             self.event_processor.process_event(xev, app);
         }
+
+        self.event_processor.drain_ime_requests();
     }
 
     fn control_flow(&self) -> ControlFlow {
