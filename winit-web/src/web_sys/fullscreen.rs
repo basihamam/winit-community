@@ -52,7 +52,7 @@ pub(crate) fn request_fullscreen(
         return;
     }
 
-    let canvas: &RequestFullscreen = canvas.unchecked_ref();
+    let request_fullscreen_canvas: &RequestFullscreen = canvas.unchecked_ref();
 
     match fullscreen {
         Fullscreen::Exclusive(..) => error!("Exclusive full screen mode is not supported"),
@@ -69,8 +69,12 @@ pub(crate) fn request_fullscreen(
             if let Some(monitor) = monitor.detailed(main_thread) {
                 let options: FullscreenOptions = Object::new().unchecked_into();
                 options.set_screen(&monitor);
+                let class = canvas.class_name();
+                if !class.contains("winit-fullscreen-active") {
+                    canvas.set_class_name(format!("{class} winit-fullscreen-active").trim());
+                }
                 REJECT_HANDLER.with(|handler| {
-                    let _ = canvas.request_fullscreen_with_options(&options).catch(handler);
+                    let _ = request_fullscreen_canvas.request_fullscreen_with_options(&options).catch(handler);
                 });
             } else {
                 error!(
@@ -80,12 +84,16 @@ pub(crate) fn request_fullscreen(
             }
         },
         Fullscreen::Borderless(None) => {
+            let class = canvas.class_name();
+            if !class.contains("winit-fullscreen-active") {
+                canvas.set_class_name(format!("{class} winit-fullscreen-active").trim());
+            }
             if has_fullscreen_api_support(canvas) {
                 REJECT_HANDLER.with(|handler| {
-                    let _ = canvas.request_fullscreen().catch(handler);
+                    let _ = request_fullscreen_canvas.request_fullscreen().catch(handler);
                 });
             } else {
-                canvas.webkit_request_fullscreen();
+                request_fullscreen_canvas.webkit_request_fullscreen();
             }
         },
         _ => error!("This full screen mode is not supported"),
@@ -119,6 +127,8 @@ pub fn is_fullscreen(document: &Document, canvas: &HtmlCanvasElement) -> bool {
 }
 
 pub fn exit_fullscreen(document: &Document, canvas: &HtmlCanvasElement) {
+    let class = canvas.class_name().replace("winit-fullscreen-active", "");
+    canvas.set_class_name(class.trim());
     #[wasm_bindgen]
     extern "C" {
         type ExitFullscreen;

@@ -856,13 +856,21 @@ define_class!(
 
             self.mouse_motion(event);
 
+            let momentum_phase = event.momentumPhase();
+            let touch_phase = event.phase();
+
             #[allow(non_upper_case_globals)]
-            let phase = match event.phase() {
+            let phase = match momentum_phase {
                 NSEventPhase::Began => TouchPhase::Started,
                 NSEventPhase::Changed => TouchPhase::Moved,
-                NSEventPhase::Cancelled => TouchPhase::Cancelled,
-                NSEventPhase::Ended => TouchPhase::Ended,
-                _ => return,
+                NSEventPhase::Ended | NSEventPhase::Cancelled => TouchPhase::Ended,
+                _ => match touch_phase {
+                    NSEventPhase::Began => TouchPhase::Started,
+                    NSEventPhase::Changed => TouchPhase::Moved,
+                    NSEventPhase::Cancelled => TouchPhase::Cancelled,
+                    NSEventPhase::Ended => TouchPhase::Ended,
+                    _ => return,
+                },
             };
 
             self.queue_event(WindowEvent::PinchGesture {
@@ -887,13 +895,21 @@ define_class!(
 
             self.mouse_motion(event);
 
+            let momentum_phase = event.momentumPhase();
+            let touch_phase = event.phase();
+
             #[allow(non_upper_case_globals)]
-            let phase = match event.phase() {
+            let phase = match momentum_phase {
                 NSEventPhase::Began => TouchPhase::Started,
                 NSEventPhase::Changed => TouchPhase::Moved,
-                NSEventPhase::Cancelled => TouchPhase::Cancelled,
-                NSEventPhase::Ended => TouchPhase::Ended,
-                _ => return,
+                NSEventPhase::Ended | NSEventPhase::Cancelled => TouchPhase::Ended,
+                _ => match touch_phase {
+                    NSEventPhase::Began => TouchPhase::Started,
+                    NSEventPhase::Changed => TouchPhase::Moved,
+                    NSEventPhase::Cancelled => TouchPhase::Cancelled,
+                    NSEventPhase::Ended => TouchPhase::Ended,
+                    _ => return,
+                },
             };
 
             self.queue_event(WindowEvent::RotationGesture {

@@ -141,6 +141,12 @@ impl XConnection {
             }
         }
 
+        for &fallback_name in &["default", "left_ptr", "arrow"] {
+            if let Ok(cursor) = handle.load_cursor(self.xcb_connection(), fallback_name) {
+                return Ok(cursor);
+            }
+        }
+
         Err(last_error.unwrap())
     }
 

@@ -98,11 +98,26 @@ pub trait ActiveEventLoopExtAndroid {
     fn android_app(&self) -> &AndroidApp;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScreenOrientation {
+    Unspecified = -1,
+    Landscape = 0,
+    Portrait = 1,
+    User = 2,
+    Sensor = 4,
+    SensorLandscape = 6,
+    SensorPortrait = 7,
+}
+
 /// Additional methods on [`Window`] that are specific to Android.
 pub trait WindowExtAndroid {
     fn content_rect(&self) -> Rect;
 
     fn config(&self) -> ConfigurationRef;
+
+    fn set_requested_orientation(&self, orientation: ScreenOrientation);
+
+    fn current_orientation(&self) -> ScreenOrientation;
 }
 
 impl WindowExtAndroid for dyn CoreWindow + '_ {
@@ -114,6 +129,16 @@ impl WindowExtAndroid for dyn CoreWindow + '_ {
     fn config(&self) -> ConfigurationRef {
         let window = self.cast_ref::<Window>().unwrap();
         window.config()
+    }
+
+    fn set_requested_orientation(&self, orientation: ScreenOrientation) {
+        let window = self.cast_ref::<Window>().unwrap();
+        window.set_requested_orientation(orientation);
+    }
+
+    fn current_orientation(&self) -> ScreenOrientation {
+        let window = self.cast_ref::<Window>().unwrap();
+        window.current_orientation()
     }
 }
 

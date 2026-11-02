@@ -2809,15 +2809,23 @@ unsafe fn public_window_callback_inner(
 
             if window_state.min_size.is_some() || window_state.max_size.is_some() {
                 if let Some(min_size) = window_state.min_size {
-                    let min_size = min_size.to_physical(window_state.scale_factor);
+                    let min_size = min_size.to_logical::<f64>(window_state.scale_factor);
+                    let min_physical = PhysicalSize::new(
+                        (min_size.width * window_state.scale_factor).ceil() as u32,
+                        (min_size.height * window_state.scale_factor).ceil() as u32,
+                    );
                     let (width, height): (u32, u32) =
-                        window_flags.adjust_size(window, min_size).into();
+                        window_flags.adjust_size(window, min_physical).into();
                     unsafe { (*mmi).ptMinTrackSize = POINT { x: width as i32, y: height as i32 } };
                 }
                 if let Some(max_size) = window_state.max_size {
-                    let max_size = max_size.to_physical(window_state.scale_factor);
+                    let max_size = max_size.to_logical::<f64>(window_state.scale_factor);
+                    let max_physical = PhysicalSize::new(
+                        (max_size.width * window_state.scale_factor).ceil() as u32,
+                        (max_size.height * window_state.scale_factor).ceil() as u32,
+                    );
                     let (width, height): (u32, u32) =
-                        window_flags.adjust_size(window, max_size).into();
+                        window_flags.adjust_size(window, max_physical).into();
                     unsafe { (*mmi).ptMaxTrackSize = POINT { x: width as i32, y: height as i32 } };
                 }
             }

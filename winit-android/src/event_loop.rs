@@ -974,6 +974,19 @@ impl Window {
         self.app.content_rect()
     }
 
+    pub(crate) fn set_requested_orientation(&self, _orientation: crate::ScreenOrientation) {
+        // Can be dynamically invoked if NDK context provides the activity
+    }
+
+    pub(crate) fn current_orientation(&self) -> crate::ScreenOrientation {
+        let config = self.app.config();
+        match config.orientation() {
+            ndk::configuration::Orientation::Land => crate::ScreenOrientation::Landscape,
+            ndk::configuration::Orientation::Port => crate::ScreenOrientation::Portrait,
+            _ => crate::ScreenOrientation::Unspecified,
+        }
+    }
+
     // Allow the usage of HasRawWindowHandle inside this function
     #[allow(deprecated)]
     fn raw_window_handle_rwh_06(&self) -> Result<rwh_06::RawWindowHandle, rwh_06::HandleError> {
