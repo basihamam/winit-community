@@ -25,6 +25,19 @@ pub(crate) struct ImeState {
     enabled: bool,
     /// Whether the application was last told that the IME is enabled.
     reported: bool,
+    /// Animated bottom inset in pixels for Android 11+ smooth transitions.
+    animated_bottom_inset: u32,
+}
+
+impl ImeState {
+    #[allow(dead_code)]
+    pub(crate) fn update_animated_bottom_inset(&mut self, inset: u32) {
+        self.animated_bottom_inset = inset;
+    }
+
+    pub(crate) fn animated_bottom_inset(&self) -> u32 {
+        self.animated_bottom_inset
+    }
 }
 
 /// A snapshot of the `GameTextInput` buffer. Offsets are in UTF-16 code units, as Java counts

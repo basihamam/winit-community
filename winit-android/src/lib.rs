@@ -118,6 +118,8 @@ pub trait WindowExtAndroid {
     fn set_requested_orientation(&self, orientation: ScreenOrientation);
 
     fn current_orientation(&self) -> ScreenOrientation;
+
+    fn animated_ime_inset(&self) -> u32;
 }
 
 impl WindowExtAndroid for dyn CoreWindow + '_ {
@@ -139,6 +141,11 @@ impl WindowExtAndroid for dyn CoreWindow + '_ {
     fn current_orientation(&self) -> ScreenOrientation {
         let window = self.cast_ref::<Window>().unwrap();
         window.current_orientation()
+    }
+
+    fn animated_ime_inset(&self) -> u32 {
+        let window = self.cast_ref::<Window>().unwrap();
+        window.animated_ime_inset()
     }
 }
 

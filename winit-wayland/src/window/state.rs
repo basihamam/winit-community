@@ -551,6 +551,12 @@ impl WindowState {
         if let Some(viewport) = self.viewport.as_ref() {
             // Set surface size without the borders.
             viewport.set_destination(self.size.width as _, self.size.height as _);
+            if self.fractional_scale.is_some() {
+                let scale = self.scale_factor();
+                let buf_w = (self.size.width as f64 * scale).round();
+                let buf_h = (self.size.height as f64 * scale).round();
+                viewport.set_source(0.0, 0.0, buf_w, buf_h);
+            }
         }
 
         // Update blur region with new size.
@@ -624,6 +630,25 @@ impl WindowState {
     #[inline]
     pub fn scale_factor(&self) -> f64 {
         self.scale_factor
+    }
+
+    /// Atomically commit viewport source and destination with a newly attached buffer.
+    pub fn commit_viewport_and_buffer(
+        &mut self,
+        surface: &sctk::reexports::client::protocol::wl_surface::WlSurface,
+        buffer_size: PhysicalSize<u32>,
+    ) {
+        if let Some(viewport) = &self.viewport {
+            let logical_size = self.size;
+            viewport.set_source(
+                0.0,
+                0.0,
+                buffer_size.width as f64,
+                buffer_size.height as f64,
+            );
+            viewport.set_destination(logical_size.width as i32, logical_size.height as i32);
+        }
+        surface.commit();
     }
 
     /// Set the resize increments of the window.

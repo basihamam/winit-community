@@ -2974,15 +2974,44 @@ unsafe fn public_window_callback_inner(
                 }
             };
 
+            let final_outer_rect = if dragging_window {
+                if let Ok(cursor_pos) = util::get_cursor_position() {
+                    let new_width = (new_outer_rect.right - new_outer_rect.left) as i32;
+                    let new_height = (new_outer_rect.bottom - new_outer_rect.top) as i32;
+                    let old_outer_rect = util::WindowArea::Outer
+                        .get_rect(window)
+                        .unwrap_or(new_outer_rect);
+                    let old_width = (old_outer_rect.right - old_outer_rect.left) as i32;
+                    let anchor_ratio = if old_width > 0 {
+                        ((cursor_pos.x - old_outer_rect.left) as f64 / old_width as f64).clamp(0.05, 0.95)
+                    } else {
+                        0.5
+                    };
+                    let new_left = cursor_pos.x - (new_width as f64 * anchor_ratio).round() as i32;
+                    let cursor_offset_top = (cursor_pos.y - old_outer_rect.top).max(5);
+                    let new_top = cursor_pos.y - cursor_offset_top;
+                    RECT {
+                        left: new_left,
+                        top: new_top,
+                        right: new_left + new_width,
+                        bottom: new_top + new_height,
+                    }
+                } else {
+                    new_outer_rect
+                }
+            } else {
+                new_outer_rect
+            };
+
             if !userdata.window_state_lock().currently_repositioning {
                 unsafe {
                     SetWindowPos(
                         window,
                         ptr::null_mut(),
-                        new_outer_rect.left,
-                        new_outer_rect.top,
-                        new_outer_rect.right - new_outer_rect.left,
-                        new_outer_rect.bottom - new_outer_rect.top,
+                        final_outer_rect.left,
+                        final_outer_rect.top,
+                        final_outer_rect.right - final_outer_rect.left,
+                        final_outer_rect.bottom - final_outer_rect.top,
                         SWP_NOZORDER | SWP_NOACTIVATE,
                     )
                 };

@@ -225,6 +225,12 @@ pub trait WindowExtMacOS {
 
     /// Getter for the [`WindowExtMacOS::set_blur_material`].
     fn blur_material(&self) -> BlurMaterial;
+
+    /// Sets the application presentation options (e.g. AutoHideDock, AutoHideMenuBar).
+    fn set_presentation_options(&self, options: usize);
+
+    /// Getter for the [`WindowExtMacOS::set_presentation_options`].
+    fn presentation_options(&self) -> usize;
 }
 
 impl WindowExtMacOS for dyn Window + '_ {
@@ -370,6 +376,18 @@ impl WindowExtMacOS for dyn Window + '_ {
     fn blur_material(&self) -> BlurMaterial {
         let window = self.cast_ref::<AppKitWindow>().unwrap();
         window.maybe_wait_on_main(|w| w.blur_material())
+    }
+
+    #[inline]
+    fn set_presentation_options(&self, options: usize) {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(move |w| w.set_presentation_options(options))
+    }
+
+    #[inline]
+    fn presentation_options(&self) -> usize {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(|w| w.presentation_options())
     }
 }
 

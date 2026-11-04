@@ -68,6 +68,8 @@ struct Execution {
     on_key_press: OnEventHandle<KeyboardEvent>,
     on_key_release: OnEventHandle<KeyboardEvent>,
     on_visibility_change: OnEventHandle<web_sys::Event>,
+    on_gamepad_connected: OnEventHandle<web_sys::GamepadEvent>,
+    on_gamepad_disconnected: OnEventHandle<web_sys::GamepadEvent>,
 }
 
 impl fmt::Debug for Execution {
@@ -214,6 +216,8 @@ impl Shared {
                 on_key_press: RefCell::new(None),
                 on_key_release: RefCell::new(None),
                 on_visibility_change: RefCell::new(None),
+                on_gamepad_connected: RefCell::new(None),
+                on_gamepad_disconnected: RefCell::new(None),
             }
         }))
     }
@@ -438,6 +442,34 @@ impl Shared {
                         state: ElementState::Released,
                     }),
                 });
+            }),
+        ));
+        let runner = self.clone();
+        *self.0.on_gamepad_connected.borrow_mut() = Some(EventListenerHandle::new(
+            self.window().clone(),
+            "gamepadconnected",
+            Closure::new(move |event: web_sys::GamepadEvent| {
+                if let Some(pad) = event.gamepad() {
+                    let device_id = event::mkdid(pad.index() as i32);
+                    runner.send_event(Event::DeviceEvent {
+                        device_id,
+                        event: DeviceEvent::Added,
+                    });
+                }
+            }),
+        ));
+        let runner = self.clone();
+        *self.0.on_gamepad_disconnected.borrow_mut() = Some(EventListenerHandle::new(
+            self.window().clone(),
+            "gamepaddisconnected",
+            Closure::new(move |event: web_sys::GamepadEvent| {
+                if let Some(pad) = event.gamepad() {
+                    let device_id = event::mkdid(pad.index() as i32);
+                    runner.send_event(Event::DeviceEvent {
+                        device_id,
+                        event: DeviceEvent::Removed,
+                    });
+                }
             }),
         ));
         let runner = self.clone();
@@ -750,6 +782,8 @@ impl Shared {
         *self.0.on_key_press.borrow_mut() = None;
         *self.0.on_key_release.borrow_mut() = None;
         *self.0.on_visibility_change.borrow_mut() = None;
+        *self.0.on_gamepad_connected.borrow_mut() = None;
+        *self.0.on_gamepad_disconnected.borrow_mut() = None;
         // Dropping the `Runner` drops the event handler closure, which will in
         // turn drop all `Window`s moved into the closure.
         *self.0.runner.borrow_mut() = RunnerEnum::Destroyed;

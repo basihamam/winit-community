@@ -546,6 +546,40 @@ pub enum WindowEvent {
     ///
     /// [the safe area]: crate::window::Window::safe_area
     RedrawRequested,
+
+    /// A window event wrapped with a monotonic timestamp indicating when the event occurred.
+    Timestamped {
+        /// Monotonic timestamp when the OS or hardware recorded this event.
+        timestamp: Instant,
+        /// The inner window event.
+        event: Box<WindowEvent>,
+    },
+}
+
+impl WindowEvent {
+    /// Returns the monotonic timestamp if this event was wrapped with a timestamp, or `None`.
+    pub fn timestamp(&self) -> Option<Instant> {
+        match self {
+            Self::Timestamped { timestamp, .. } => Some(*timestamp),
+            _ => None,
+        }
+    }
+
+    /// Wraps this event with a monotonic timestamp.
+    pub fn with_timestamp(self, timestamp: Instant) -> Self {
+        Self::Timestamped {
+            timestamp,
+            event: Box::new(self),
+        }
+    }
+
+    /// Unwraps the inner event if this was a `Timestamped` event, or returns `self`.
+    pub fn into_inner(self) -> Self {
+        match self {
+            Self::Timestamped { event, .. } => *event,
+            other => other,
+        }
+    }
 }
 
 /// Represents the kind type of a pointer event.
@@ -788,6 +822,12 @@ pub enum DeviceEvent {
     },
 
     Key(RawKeyEvent),
+
+    /// A device has been connected or added.
+    Added,
+
+    /// A device has been disconnected or removed.
+    Removed,
 }
 
 /// Describes a keyboard input as a raw device event.

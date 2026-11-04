@@ -2541,6 +2541,23 @@ impl WindowExtMacOS for WindowDelegate {
     fn participates_in_cycle(&self) -> bool {
         self.window().collectionBehavior().contains(NSWindowCollectionBehavior::ParticipatesInCycle)
     }
+
+    #[inline]
+    fn set_presentation_options(&self, options: usize) {
+        let mtm = MainThreadMarker::from(self);
+        let app = NSApplication::sharedApplication(mtm);
+        if self.ivars().save_presentation_opts.get().is_none() {
+            self.ivars().save_presentation_opts.set(Some(app.presentationOptions()));
+        }
+        app.setPresentationOptions(NSApplicationPresentationOptions::from_bits_truncate(options));
+    }
+
+    #[inline]
+    fn presentation_options(&self) -> usize {
+        let mtm = MainThreadMarker::from(self);
+        let app = NSApplication::sharedApplication(mtm);
+        app.presentationOptions().bits()
+    }
 }
 
 const DEFAULT_STANDARD_FRAME: NSRect =

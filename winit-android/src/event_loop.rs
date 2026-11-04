@@ -981,6 +981,10 @@ impl Window {
         self.app.config()
     }
 
+    pub fn animated_ime_inset(&self) -> u32 {
+        self.ime.lock().unwrap().animated_bottom_inset()
+    }
+
     /// Load the text of the focused field into `GameTextInput`, or an empty buffer without it.
     ///
     /// This restarts the input connection, so nothing is loaded when the keyboard already has
