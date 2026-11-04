@@ -237,6 +237,23 @@ pub trait WindowExtMacOS {
 
     /// Getter for [`WindowExtMacOS::set_titlebar_appears_transparent`].
     fn titlebar_appears_transparent(&self) -> bool;
+
+    /// Sets the window sharing type (controls Mission Control preview and screen capture).
+    fn set_sharing_type(&self, sharing_type: SharingType);
+
+    /// Getter for [`WindowExtMacOS::set_sharing_type`].
+    fn sharing_type(&self) -> SharingType;
+}
+
+/// Corresponds to `NSWindowSharingType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SharingType {
+    /// Corresponds to `NSWindowSharingNone`.
+    None = 0,
+    /// Corresponds to `NSWindowSharingReadOnly`.
+    #[default]
+    ReadOnly = 1,
 }
 
 impl WindowExtMacOS for dyn Window + '_ {
@@ -406,6 +423,18 @@ impl WindowExtMacOS for dyn Window + '_ {
     fn titlebar_appears_transparent(&self) -> bool {
         let window = self.cast_ref::<AppKitWindow>().unwrap();
         window.maybe_wait_on_main(|w| w.titlebar_appears_transparent())
+    }
+
+    #[inline]
+    fn set_sharing_type(&self, sharing_type: SharingType) {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(move |w| w.set_sharing_type(sharing_type))
+    }
+
+    #[inline]
+    fn sharing_type(&self) -> SharingType {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(|w| w.sharing_type())
     }
 }
 

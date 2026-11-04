@@ -473,6 +473,8 @@ impl Drop for Window {
         }
 
         unsafe {
+            // Ensure any cursor confinement is released on drop.
+            windows_sys::Win32::UI::WindowsAndMessaging::ClipCursor(std::ptr::null());
             // The window must be destroyed from the same thread that created it, so we send a
             // custom message to be handled by our callback to do the actual work.
             PostMessageW(self.hwnd(), DESTROY_MSG_ID.get(), 0, 0);

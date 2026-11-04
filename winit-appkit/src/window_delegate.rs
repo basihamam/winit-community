@@ -2568,6 +2568,23 @@ impl WindowExtMacOS for WindowDelegate {
     fn titlebar_appears_transparent(&self) -> bool {
         self.window().titlebarAppearsTransparent()
     }
+
+    #[inline]
+    fn set_sharing_type(&self, sharing_type: crate::SharingType) {
+        let ns_type = match sharing_type {
+            crate::SharingType::None => NSWindowSharingType::None,
+            crate::SharingType::ReadOnly => NSWindowSharingType::ReadOnly,
+        };
+        self.window().setSharingType(ns_type);
+    }
+
+    #[inline]
+    fn sharing_type(&self) -> crate::SharingType {
+        match self.window().sharingType() {
+            NSWindowSharingType::None => crate::SharingType::None,
+            _ => crate::SharingType::ReadOnly,
+        }
+    }
 }
 
 const DEFAULT_STANDARD_FRAME: NSRect =

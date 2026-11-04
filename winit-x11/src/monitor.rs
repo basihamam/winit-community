@@ -264,11 +264,18 @@ impl XConnection {
 
     #[inline]
     pub fn primary_monitor(&self) -> Result<MonitorHandle, X11Error> {
-        Ok(self
-            .available_monitors()?
-            .into_iter()
-            .find(|monitor| monitor.primary)
-            .unwrap_or_else(MonitorHandle::dummy))
+        let monitors = self.available_monitors().unwrap_or_default();
+        if let Some(primary) = monitors.into_iter().find(|monitor| monitor.primary) {
+            return Ok(primary);
+        }
+        // Fallback to first available active monitor
+        if let Ok(mut all) = self.available_monitors() {
+            if let Some(first) = all.drain(..).next() {
+                return Ok(first);
+            }
+        }
+        // Synthetic fallback when running in VMs/CI/Xvfb without explicit RandR primary
+        Ok(MonitorHandle::dummy())
     }
 
     pub fn select_xrandr_input(&self, root: xproto::Window) -> Result<u8, X11Error> {

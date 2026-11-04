@@ -553,9 +553,9 @@ impl WindowState {
             viewport.set_destination(self.size.width as _, self.size.height as _);
             if self.fractional_scale.is_some() {
                 let scale = self.scale_factor();
-                let buf_w = (self.size.width as f64 * scale).round();
-                let buf_h = (self.size.height as f64 * scale).round();
-                viewport.set_source(0.0, 0.0, buf_w, buf_h);
+                let src_w = self.size.width as f64 * scale;
+                let src_h = self.size.height as f64 * scale;
+                viewport.set_source(0.0, 0.0, src_w, src_h);
             }
         }
 
@@ -640,11 +640,14 @@ impl WindowState {
     ) {
         if let Some(viewport) = &self.viewport {
             let logical_size = self.size;
+            let scale = self.scale_factor();
+            let src_w = (logical_size.width as f64 * scale).min(buffer_size.width as f64);
+            let src_h = (logical_size.height as f64 * scale).min(buffer_size.height as f64);
             viewport.set_source(
                 0.0,
                 0.0,
-                buffer_size.width as f64,
-                buffer_size.height as f64,
+                src_w,
+                src_h,
             );
             viewport.set_destination(logical_size.width as i32, logical_size.height as i32);
         }

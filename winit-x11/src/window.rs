@@ -351,6 +351,7 @@ impl Drop for Window {
             xconn.xcb_connection().destroy_window(window.id().into_raw() as xproto::Window)
         {
             c.ignore_error();
+            let _ = xconn.flush_requests();
         }
     }
 }
@@ -1212,7 +1213,7 @@ impl UnownedWindow {
     }
 
     pub fn primary_monitor(&self) -> Option<X11MonitorHandle> {
-        Some(self.xconn.primary_monitor().expect("Failed to get primary monitor"))
+        Some(self.xconn.primary_monitor().unwrap_or_else(|_| X11MonitorHandle::dummy()))
     }
 
     #[inline]
