@@ -1,11 +1,10 @@
 use std::cell::OnceCell;
 
 use js_sys::{Object, Promise};
-use tracing::error;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{Document, DomException, Element, Navigator, console};
+use web_sys::{Document, Element, Navigator};
 
 pub(crate) fn is_cursor_lock_raw(navigator: &Navigator, document: &Document) -> bool {
     thread_local! {
@@ -40,25 +39,21 @@ pub(crate) fn is_cursor_lock_raw(navigator: &Navigator, document: &Document) -> 
 }
 
 pub(crate) fn request_pointer_lock(navigator: &Navigator, document: &Document, element: &Element) {
+    let element_ref: &ElementExt = element.unchecked_ref();
     if is_cursor_lock_raw(navigator, document) {
-        thread_local! {
-            static REJECT_HANDLER: Closure<dyn FnMut(JsValue)> = Closure::new(|error: JsValue| {
-                if let Some(error) = error.dyn_ref::<DomException>() {
-                        error!("Failed to lock pointer. {}: {}", error.name(), error.message());
-                } else {
-                    console::error_1(&error);
-                    error!("Failed to lock pointer");
-                }
-            });
-        }
+        let element_fallback = element.clone();
+        let fallback_handler: Closure<dyn FnMut(JsValue)> = Closure::once(move |_error: JsValue| {
+            let el: &ElementExt = element_fallback.unchecked_ref();
+            el.request_pointer_lock();
+        });
 
-        let element: &ElementExt = element.unchecked_ref();
         let options: PointerLockOptions = Object::new().unchecked_into();
         options.set_unadjusted_movement(true);
-        let _ = REJECT_HANDLER
-            .with(|handler| element.request_pointer_lock_with_options(&options).catch(handler));
+        let _ = element_ref
+            .request_pointer_lock_with_options(&options)
+            .catch(&fallback_handler);
     } else {
-        element.request_pointer_lock();
+        element_ref.request_pointer_lock();
     }
 }
 

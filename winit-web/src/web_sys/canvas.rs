@@ -395,6 +395,14 @@ impl Canvas {
         self.handlers.borrow_mut().pointer_handler.on_pointer_enter(&self.common, handler)
     }
 
+    pub fn on_touch_cancel<F>(&self, handler: F)
+    where
+        F: 'static
+            + FnMut(ModifiersState, Option<DeviceId>, bool, PhysicalPosition<f64>, PointerKind),
+    {
+        self.handlers.borrow_mut().pointer_handler.on_touch_cancel(&self.common, handler)
+    }
+
     pub fn on_pointer_release<C>(&self, handler: C)
     where
         C: 'static

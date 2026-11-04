@@ -18,7 +18,7 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromRect, MonitorFromWindow,
-    RDW_INTERNALPAINT, RDW_INVALIDATE, RedrawWindow, SC_SCREENSAVE, ValidateRect,
+    RDW_INTERNALPAINT, RDW_INVALIDATE, RedrawWindow, SC_SCREENSAVE, ScreenToClient, ValidateRect,
 };
 use windows_sys::Win32::System::DataExchange::CountClipboardFormats;
 use windows_sys::Win32::System::Ole::{OleSetClipboard, RevokeDragDrop};
@@ -57,7 +57,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION,
     WM_INPUT, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN,
     WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MENUCHAR, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
-    WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCCREATE, WM_NCDESTROY, WM_NCLBUTTONDOWN,
+    WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCCREATE, WM_NCDESTROY, WM_NCHITTEST, WM_NCLBUTTONDOWN,
     WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERUP, WM_POINTERUPDATE,
     WM_QUERYENDSESSION, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS,
     WM_SETTINGCHANGE, WM_SIZE, WM_SIZING, WM_SYSCOMMAND, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TOUCH,
@@ -2774,6 +2774,23 @@ unsafe fn public_window_callback_inner(
                 unsafe { lose_active_focus(window, userdata) };
             }
             result = ProcResult::Value(0);
+        },
+
+        WM_NCHITTEST => {
+            // If the mouse is inside the client area, skip DefWindowProc to avoid queue starvation at 1000Hz - 8000Hz
+            let x = util::loword(lparam as u32) as i16 as i32;
+            let y = util::hiword(lparam as u32) as i16 as i32;
+            let mut pt = POINT { x, y };
+            unsafe { ScreenToClient(window, &mut pt) };
+
+            let mut client_rect = RECT::default();
+            unsafe { GetClientRect(window, &mut client_rect) };
+
+            if pt.x >= 0 && pt.x < client_rect.right && pt.y >= 0 && pt.y < client_rect.bottom {
+                result = ProcResult::Value(HTCLIENT as isize);
+            } else {
+                result = ProcResult::DefWindowProc(wparam);
+            }
         },
 
         WM_SETCURSOR => {

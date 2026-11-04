@@ -239,6 +239,32 @@ impl ActiveEventLoop {
             }
         });
 
+        canvas.on_touch_cancel({
+            let runner = self.runner.clone();
+            let has_focus = has_focus.clone();
+            let modifiers = self.modifiers.clone();
+
+            move |active_modifiers, device_id, primary, position, kind| {
+                let focus = (has_focus.get() && modifiers.get() != active_modifiers).then(|| {
+                    modifiers.set(active_modifiers);
+                    Event::WindowEvent {
+                        window_id,
+                        event: WindowEvent::ModifiersChanged(active_modifiers.into()),
+                    }
+                });
+
+                runner.send_events(focus.into_iter().chain(iter::once(Event::WindowEvent {
+                    window_id,
+                    event: WindowEvent::PointerLeft {
+                        device_id,
+                        primary,
+                        position: Some(position),
+                        kind,
+                    },
+                })))
+            }
+        });
+
         canvas.on_pointer_move(
             {
                 let runner = self.runner.clone();

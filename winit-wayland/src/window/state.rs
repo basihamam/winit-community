@@ -515,6 +515,8 @@ impl WindowState {
             }
         }
 
+        let is_max_or_fs = self.is_maximized() || self.is_fullscreen();
+
         // Update the inner frame.
         let ((x, y), outer_size) = if let Some(frame) = self.frame.as_mut() {
             // Resize only visible frame.
@@ -525,7 +527,11 @@ impl WindowState {
                 );
             }
 
-            (frame.location(), frame.add_borders(self.size.width, self.size.height).into())
+            if is_max_or_fs {
+                ((0, 0), self.size)
+            } else {
+                (frame.location(), frame.add_borders(self.size.width, self.size.height).into())
+            }
         } else {
             ((0, 0), self.size)
         };
@@ -608,6 +614,10 @@ impl WindowState {
             .as_ref()
             .map(|last_configure| last_configure.is_maximized())
             .unwrap_or_default()
+    }
+
+    pub(crate) fn is_fullscreen(&self) -> bool {
+        self.fullscreen().is_some()
     }
 
     /// Get the scale factor of the window.

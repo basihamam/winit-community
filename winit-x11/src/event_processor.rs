@@ -2043,13 +2043,7 @@ impl EventProcessor {
         self.target.xconn.reload_database().expect("failed to reload Xft database");
 
         // In the future, it would be quite easy to emit monitor hotplug events.
-        let prev_list = {
-            let prev_list = self.target.xconn.invalidate_cached_monitor_list();
-            match prev_list {
-                Some(prev_list) => prev_list,
-                None => return,
-            }
-        };
+        let prev_list = self.target.xconn.invalidate_cached_monitor_list().unwrap_or_default();
 
         let new_list = self.target.xconn.available_monitors().expect("Failed to get monitor list");
         for new_monitor in new_list {

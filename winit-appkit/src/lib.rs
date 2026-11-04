@@ -209,6 +209,12 @@ pub trait WindowExtMacOS {
     /// Getter for the [`WindowExtMacOS::set_fullscreen_auxiliary`].
     fn fullscreen_auxiliary(&self) -> bool;
 
+    /// Sets whether the window participates in window cycling (Cmd+` / Stage Manager).
+    fn set_participates_in_cycle(&self, participates: bool);
+
+    /// Getter for the [`WindowExtMacOS::set_participates_in_cycle`].
+    fn participates_in_cycle(&self) -> bool;
+
     /// Sets the material drawn behind the window when it is blurred.
     ///
     /// Takes effect the next time the window is blurred, and immediately if it already is. See
@@ -340,6 +346,18 @@ impl WindowExtMacOS for dyn Window + '_ {
     fn fullscreen_auxiliary(&self) -> bool {
         let window = self.cast_ref::<AppKitWindow>().unwrap();
         window.maybe_wait_on_main(|w| w.fullscreen_auxiliary())
+    }
+
+    #[inline]
+    fn set_participates_in_cycle(&self, participates: bool) {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(move |w| w.set_participates_in_cycle(participates))
+    }
+
+    #[inline]
+    fn participates_in_cycle(&self) -> bool {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(|w| w.participates_in_cycle())
     }
 
     #[inline]

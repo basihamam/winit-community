@@ -69,6 +69,24 @@ impl PointerHandler {
             }));
     }
 
+    pub fn on_touch_cancel<F>(&mut self, canvas_common: &Common, mut handler: F)
+    where
+        F: 'static
+            + FnMut(ModifiersState, Option<DeviceId>, bool, PhysicalPosition<f64>, PointerKind),
+    {
+        let window = canvas_common.window.clone();
+        self.on_touch_cancel =
+            Some(canvas_common.add_event("pointercancel", move |event: PointerEvent| {
+                let modifiers = event::mouse_modifiers(&event);
+                let pointer_id = event.pointer_id();
+                let device_id = mkdid(pointer_id);
+                let position =
+                    event::pointer_position(&event).to_physical(super::scale_factor(&window));
+                let kind = event::pointer_kind(&event, pointer_id);
+                handler(modifiers, device_id, event.is_primary(), position, kind);
+            }));
+    }
+
     pub fn on_pointer_release<C>(&mut self, canvas_common: &Common, mut handler: C)
     where
         C: 'static

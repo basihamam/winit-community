@@ -838,7 +838,7 @@ fn new_window(
         if !macos_attrs.has_shadow {
             window.setHasShadow(false);
         }
-        if macos_attrs.fullscreen_auxiliary {
+        if macos_attrs.fullscreen_auxiliary || (!attrs.decorations && attrs.parent_window().is_some()) {
             // This must happen before the window is ordered on screen (below, and in
             // `WindowDelegate::new`), so that showing the window doesn't make macOS
             // switch away from an active fullscreen Space or attempt Split View tiling.
@@ -2522,6 +2522,24 @@ impl WindowExtMacOS for WindowDelegate {
     #[inline]
     fn fullscreen_auxiliary(&self) -> bool {
         self.window().collectionBehavior().contains(NSWindowCollectionBehavior::FullScreenAuxiliary)
+    }
+
+    #[inline]
+    fn set_participates_in_cycle(&self, participates: bool) {
+        let window = self.window();
+        let behavior = window.collectionBehavior();
+        if participates {
+            window
+                .setCollectionBehavior(behavior | NSWindowCollectionBehavior::ParticipatesInCycle);
+        } else {
+            window
+                .setCollectionBehavior(behavior - NSWindowCollectionBehavior::ParticipatesInCycle);
+        }
+    }
+
+    #[inline]
+    fn participates_in_cycle(&self) -> bool {
+        self.window().collectionBehavior().contains(NSWindowCollectionBehavior::ParticipatesInCycle)
     }
 }
 
