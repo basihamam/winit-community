@@ -13,6 +13,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use dpi::{PhysicalPosition, PhysicalSize};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// Handle to a monitor.
 ///
@@ -61,6 +63,32 @@ impl MonitorHandle {
     pub fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
         self.0.physical_size()
     }
+
+    /// Returns the maximum peak luminance of the monitor in nits (cd/m²), if available.
+    #[inline]
+    pub fn max_luminance(&self) -> Option<f32> {
+        self.0.max_luminance()
+    }
+
+    /// Returns the color gamut supported by this monitor, if available.
+    #[inline]
+    pub fn color_gamut(&self) -> Option<ColorGamut> {
+        self.0.color_gamut()
+    }
+}
+
+/// Describes the color gamut of a monitor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum ColorGamut {
+    /// Standard sRGB color gamut (~Rec.709).
+    #[default]
+    Srgb,
+    /// DCI-P3 wide color gamut (~Display P3).
+    DciP3,
+    /// Ultra-wide BT.2020 (Rec.2020) color gamut (HDR).
+    Bt2020,
 }
 
 /// Provider of the [`MonitorHandle`].
@@ -125,6 +153,16 @@ pub trait MonitorHandleProvider: Any + fmt::Debug + Send + Sync {
     ///
     /// Returns `None` if the size of the monitor could not be determined.
     fn physical_size(&self) -> Option<(NonZeroU32, NonZeroU32)> {
+        None
+    }
+
+    /// Returns the maximum peak luminance of the monitor in nits (cd/m²), if available.
+    fn max_luminance(&self) -> Option<f32> {
+        None
+    }
+
+    /// Returns the color gamut / primaries supported by this monitor, if available.
+    fn color_gamut(&self) -> Option<ColorGamut> {
         None
     }
 }

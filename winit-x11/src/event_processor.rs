@@ -419,6 +419,7 @@ impl EventProcessor {
         let window_id = mkwid(window);
 
         if xev.data.get_long(0) as xproto::Atom == self.target.wm_delete_window {
+            self.target.data_transfer_state.borrow().persist_clipboard_on_exit(window);
             app.window_event(&self.target, window_id, WindowEvent::CloseRequested);
             return;
         }

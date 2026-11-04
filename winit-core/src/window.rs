@@ -1761,6 +1761,22 @@ pub enum Theme {
     Dark,
 }
 
+/// Describes the physical posture of a foldable display or dual-screen device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum DevicePosture {
+    /// Posture cannot be determined or is a standard rigid display.
+    #[default]
+    Unknown,
+    /// The device is fully flat / open.
+    Flat,
+    /// The device is half-opened (e.g. laptop or tent flex mode).
+    HalfOpened,
+    /// The device is completely folded back-to-back.
+    Flipped,
+}
+
 /// ## Platform-specific
 ///
 /// - **X11:** Sets the WM's `XUrgencyHint`. No distinction between [`Critical`] and

@@ -2558,6 +2558,16 @@ impl WindowExtMacOS for WindowDelegate {
         let app = NSApplication::sharedApplication(mtm);
         app.presentationOptions().bits()
     }
+
+    #[inline]
+    fn set_titlebar_appears_transparent(&self, transparent: bool) {
+        self.window().setTitlebarAppearsTransparent(transparent);
+    }
+
+    #[inline]
+    fn titlebar_appears_transparent(&self) -> bool {
+        self.window().titlebarAppearsTransparent()
+    }
 }
 
 const DEFAULT_STANDARD_FRAME: NSRect =

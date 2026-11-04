@@ -985,6 +985,10 @@ impl Window {
         self.ime.lock().unwrap().animated_bottom_inset()
     }
 
+    pub fn device_posture(&self) -> winit_core::window::DevicePosture {
+        winit_core::window::DevicePosture::Unknown
+    }
+
     /// Load the text of the focused field into `GameTextInput`, or an empty buffer without it.
     ///
     /// This restarts the input connection, so nothing is loaded when the keyboard already has

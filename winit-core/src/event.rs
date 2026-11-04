@@ -554,6 +554,9 @@ pub enum WindowEvent {
         /// The inner window event.
         event: Box<WindowEvent>,
     },
+
+    /// The physical posture of the device has changed (e.g. for foldable devices).
+    PostureChanged(crate::window::DevicePosture),
 }
 
 impl WindowEvent {

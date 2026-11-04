@@ -1024,4 +1024,26 @@ impl DataTransferState {
         self.clip_incr_receive.retain(|receive| receive.clipboard != clipboard);
         self.clip_incr_send.retain(|receive| receive.clipboard != clipboard);
     }
+
+    /// Persist clipboard data via the X11 CLIPBOARD_MANAGER protocol on window close/exit.
+    pub fn persist_clipboard_on_exit(&self, window: xproto::Window) {
+        use crate::atoms::AtomName;
+        let clipboard = &self.clipboards[ClipboardSelectionType::Clipboard as usize];
+        if clipboard.owned_data.is_some() {
+            let atoms = self.xconn.atoms();
+            let clipboard_manager = atoms[AtomName::CLIPBOARD_MANAGER];
+            let save_targets = atoms[AtomName::SAVE_TARGETS];
+            let clipboard_atom = atoms[AtomName::CLIPBOARD];
+            if clipboard_manager != x11rb::NONE && save_targets != x11rb::NONE {
+                let _ = self.xconn.xcb_connection().convert_selection(
+                    window,
+                    clipboard_manager,
+                    save_targets,
+                    clipboard_atom,
+                    x11rb::CURRENT_TIME,
+                );
+                let _ = self.xconn.flush_requests();
+            }
+        }
+    }
 }

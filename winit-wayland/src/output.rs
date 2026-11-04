@@ -78,6 +78,14 @@ impl CoreMonitorHandle for MonitorHandle {
             Some((NonZeroU32::new(w as u32)?, NonZeroU32::new(h as u32)?))
         })
     }
+
+    fn color_gamut(&self) -> Option<winit_core::monitor::ColorGamut> {
+        Some(winit_core::monitor::ColorGamut::Srgb)
+    }
+
+    fn max_luminance(&self) -> Option<f32> {
+        None
+    }
 }
 
 impl PartialEq for MonitorHandle {

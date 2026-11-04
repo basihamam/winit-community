@@ -231,6 +231,12 @@ pub trait WindowExtMacOS {
 
     /// Getter for the [`WindowExtMacOS::set_presentation_options`].
     fn presentation_options(&self) -> usize;
+
+    /// Sets whether the window titlebar appears transparent.
+    fn set_titlebar_appears_transparent(&self, transparent: bool);
+
+    /// Getter for [`WindowExtMacOS::set_titlebar_appears_transparent`].
+    fn titlebar_appears_transparent(&self) -> bool;
 }
 
 impl WindowExtMacOS for dyn Window + '_ {
@@ -388,6 +394,18 @@ impl WindowExtMacOS for dyn Window + '_ {
     fn presentation_options(&self) -> usize {
         let window = self.cast_ref::<AppKitWindow>().unwrap();
         window.maybe_wait_on_main(|w| w.presentation_options())
+    }
+
+    #[inline]
+    fn set_titlebar_appears_transparent(&self, transparent: bool) {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(move |w| w.set_titlebar_appears_transparent(transparent))
+    }
+
+    #[inline]
+    fn titlebar_appears_transparent(&self) -> bool {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(|w| w.titlebar_appears_transparent())
     }
 }
 

@@ -7,7 +7,7 @@ pub mod run_on_demand;
 use std::any::Any;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use rwh_06::{DisplayHandle, HandleError, HasDisplayHandle};
@@ -456,6 +456,7 @@ pub enum DndAction {
 #[derive(Clone, Debug)]
 pub struct EventLoopProxy {
     pub(crate) proxy: Arc<dyn EventLoopProxyProvider>,
+    is_woken: Arc<AtomicBool>,
 }
 
 impl EventLoopProxy {
@@ -472,15 +473,26 @@ impl EventLoopProxy {
     ///
     /// # Platform-specific
     ///
-    /// - **Windows**: The wake-up may be ignored under high contention, see [#3687].
+    /// - **Windows**: High-frequency wake-ups are coalesced atomically, preventing message queue
+    ///   saturation and starvation under high contention (see [#3687]).
     ///
     /// [#3687]: https://github.com/rust-windowing/winit/pull/3687
     pub fn wake_up(&self) {
-        self.proxy.wake_up();
+        if !self.is_woken.swap(true, Ordering::SeqCst) {
+            self.proxy.wake_up();
+        }
+    }
+
+    /// Resets the coalesced wake-up state, allowing the next `wake_up` to trigger an OS wake.
+    pub fn reset_woken(&self) {
+        self.is_woken.store(false, Ordering::SeqCst);
     }
 
     pub fn new(proxy: Arc<dyn EventLoopProxyProvider>) -> Self {
-        Self { proxy }
+        Self {
+            proxy,
+            is_woken: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 

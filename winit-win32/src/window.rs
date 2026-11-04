@@ -244,12 +244,22 @@ impl Window {
 
     pub fn set_system_backdrop(&self, backdrop_type: BackdropType) {
         unsafe {
-            DwmSetWindowAttribute(
+            let res = DwmSetWindowAttribute(
                 self.hwnd(),
                 DWMWA_SYSTEMBACKDROP_TYPE as u32,
                 &(backdrop_type as i32) as *const _ as _,
                 mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
             );
+            // Fallback for Windows 10 and early Windows 11 without DWMWA_SYSTEMBACKDROP_TYPE
+            if res != 0 && backdrop_type == BackdropType::TransientWindow {
+                let bb = DWM_BLURBEHIND {
+                    dwFlags: DWM_BB_ENABLE,
+                    fEnable: 1,
+                    hRgnBlur: 0 as _,
+                    fTransitionOnMaximized: 0,
+                };
+                let _ = DwmEnableBlurBehindWindow(self.hwnd(), &bb);
+            }
         }
     }
 

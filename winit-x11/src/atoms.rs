@@ -45,6 +45,8 @@ atom_manager! {
     TARGETS,
     TIMESTAMP,
     CLIPBOARD,
+    CLIPBOARD_MANAGER,
+    SAVE_TARGETS,
     INCR,
 
     // Assorted ICCCM Atoms
