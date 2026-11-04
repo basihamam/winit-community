@@ -52,7 +52,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     RegisterClassExW, RegisterWindowMessageA, SC_MINIMIZE, SC_RESTORE, SIZE_MAXIMIZED,
     SPI_GETWHEELSCROLLCHARS, SPI_GETWHEELSCROLLLINES, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SetCursor, SetWindowPos, SystemParametersInfoW, TranslateMessage, WHEEL_DELTA,
-    WINDOWPOS, WM_CAPTURECHANGED, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_ENDSESSION,
+    WINDOWPOS, WM_CAPTURECHANGED, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENDSESSION,
     WM_ENTERMENULOOP, WM_ENTERSIZEMOVE, WM_EXITMENULOOP, WM_EXITSIZEMOVE, WM_GETMINMAXINFO,
     WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION,
     WM_INPUT, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN,
@@ -3018,6 +3018,17 @@ unsafe fn public_window_callback_inner(
             }
 
             result = ProcResult::Value(0);
+        },
+
+        WM_DISPLAYCHANGE => {
+            let mut window_state = userdata.window_state_lock();
+            if matches!(window_state.fullscreen, Some(winit_core::monitor::Fullscreen::Exclusive(_, _))) {
+                // If display configuration changed while in exclusive fullscreen (e.g. monitor unplugged),
+                // safely restore display mode and recover to windowed mode to prevent driver hang.
+                crate::fullscreen::restore_display_mode(None);
+                window_state.fullscreen = None;
+            }
+            result = ProcResult::DefWindowProc(wparam);
         },
 
         WM_SETTINGCHANGE => {

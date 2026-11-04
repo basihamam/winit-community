@@ -117,13 +117,24 @@ pub fn is_fullscreen(document: &Document, canvas: &HtmlCanvasElement) -> bool {
         document.webkit_fullscreen_element()
     };
 
-    match element {
+    let is_fs = match element {
         Some(element) => {
             let canvas: &Element = canvas;
             canvas == &element
         },
         None => false,
+    };
+
+    if !is_fs {
+        // If the canvas is no longer the fullscreen element (e.g. user pressed Esc),
+        // ensure any remaining active fullscreen class is cleaned up.
+        let class = canvas.class_name();
+        if class.contains("winit-fullscreen-active") {
+            canvas.set_class_name(class.replace("winit-fullscreen-active", "").trim());
+        }
     }
+
+    is_fs
 }
 
 pub fn exit_fullscreen(document: &Document, canvas: &HtmlCanvasElement) {

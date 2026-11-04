@@ -243,6 +243,12 @@ pub trait WindowExtMacOS {
 
     /// Getter for [`WindowExtMacOS::set_sharing_type`].
     fn sharing_type(&self) -> SharingType;
+
+    /// Sets whether the window behaves as a non-activating panel (does not steal key focus).
+    fn set_nonactivating_panel(&self, nonactivating: bool);
+
+    /// Getter for [`WindowExtMacOS::set_nonactivating_panel`].
+    fn is_nonactivating_panel(&self) -> bool;
 }
 
 /// Corresponds to `NSWindowSharingType`.
@@ -435,6 +441,18 @@ impl WindowExtMacOS for dyn Window + '_ {
     fn sharing_type(&self) -> SharingType {
         let window = self.cast_ref::<AppKitWindow>().unwrap();
         window.maybe_wait_on_main(|w| w.sharing_type())
+    }
+
+    #[inline]
+    fn set_nonactivating_panel(&self, nonactivating: bool) {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(move |w| w.set_nonactivating_panel(nonactivating))
+    }
+
+    #[inline]
+    fn is_nonactivating_panel(&self) -> bool {
+        let window = self.cast_ref::<AppKitWindow>().unwrap();
+        window.maybe_wait_on_main(|w| w.is_nonactivating_panel())
     }
 }
 

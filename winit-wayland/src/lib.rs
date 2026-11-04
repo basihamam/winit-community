@@ -29,7 +29,8 @@ use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::shm::slot::{Buffer, CreateBufferError, SlotPool};
 use wayland_client::protocol::wl_shm::Format;
 use winit_core::data_transfer::DataTransferId;
-use winit_core::event_loop::ActiveEventLoop as CoreActiveEventLoop;
+use winit_core::error::RequestError;
+use winit_core::event_loop::{ActiveEventLoop as CoreActiveEventLoop, AsyncRequestSerial};
 use winit_core::window::{
     ActivationToken, PlatformWindowAttributes, Window as CoreWindow, WindowId,
 };
@@ -102,12 +103,33 @@ pub trait EventLoopBuilderExtWayland {
 pub trait WindowExtWayland {
     /// Returns `xdg_toplevel` of the window or [`None`] if the window is X11 window.
     fn xdg_toplevel(&self) -> Option<NonNull<c_void>>;
+
+    /// Request an activation token from the compositor using `xdg_activation_v1`.
+    fn request_activation_token(&self) -> Result<AsyncRequestSerial, RequestError>;
+
+    /// Activate the window using an activation token.
+    fn activate_with_token(&self, token: String);
 }
 
 impl WindowExtWayland for dyn CoreWindow + '_ {
     #[inline]
     fn xdg_toplevel(&self) -> Option<NonNull<c_void>> {
         self.cast_ref::<Window>()?.xdg_toplevel()
+    }
+
+    #[inline]
+    fn request_activation_token(&self) -> Result<AsyncRequestSerial, RequestError> {
+        match self.cast_ref::<Window>() {
+            Some(w) => w.request_activation_token(),
+            None => Err(winit_core::error::NotSupportedError::new("not a Wayland window").into()),
+        }
+    }
+
+    #[inline]
+    fn activate_with_token(&self, token: String) {
+        if let Some(w) = self.cast_ref::<Window>() {
+            w.activate_with_token(token);
+        }
     }
 }
 

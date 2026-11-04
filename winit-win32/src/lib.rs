@@ -299,6 +299,14 @@ pub trait WindowExtWindows {
     /// The default is `true`.
     fn set_use_system_scroll_speed(&self, should_use: bool);
 
+    /// Returns the system accent color configured by the user in Personalization settings.
+    ///
+    /// Returns `Some((r, g, b))` or `None` if unavailable.
+    fn system_accent_color(&self) -> Option<(u8, u8, u8)>;
+
+    /// Returns whether the system is currently using High Contrast mode.
+    fn is_high_contrast(&self) -> bool;
+
     /// Get the raw window handle for this [`Window`] without checking for thread affinity.
     ///
     /// Window handles in Win32 have a property called "thread affinity" that ties them to their
@@ -415,6 +423,18 @@ impl WindowExtWindows for dyn CoreWindow + '_ {
     fn set_use_system_scroll_speed(&self, should_use: bool) {
         let window = self.cast_ref::<Window>().unwrap();
         window.set_use_system_scroll_speed(should_use)
+    }
+
+    #[inline]
+    fn system_accent_color(&self) -> Option<(u8, u8, u8)> {
+        let window = self.cast_ref::<Window>().unwrap();
+        window.system_accent_color()
+    }
+
+    #[inline]
+    fn is_high_contrast(&self) -> bool {
+        let window = self.cast_ref::<Window>().unwrap();
+        window.is_high_contrast()
     }
 
     unsafe fn window_handle_any_thread(

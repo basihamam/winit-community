@@ -463,6 +463,16 @@ impl Window {
             IconType::Big => self.window_state_lock().taskbar_icon = None,
         }
     }
+
+    #[inline]
+    pub fn system_accent_color(&self) -> Option<(u8, u8, u8)> {
+        crate::dark_mode::system_accent_color()
+    }
+
+    #[inline]
+    pub fn is_high_contrast(&self) -> bool {
+        crate::dark_mode::is_high_contrast()
+    }
 }
 
 impl Drop for Window {

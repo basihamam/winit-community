@@ -1746,7 +1746,7 @@ impl UnownedWindow {
     ) -> (u32, u32) {
         let scale_factor = new_scale_factor / old_scale_factor;
         self.update_normal_hints(|normal_hints| {
-            let dpi_adjuster = |size: Size| -> (i32, i32) { cast_size_to_hint(size, scale_factor) };
+            let dpi_adjuster = |size: Size| -> (i32, i32) { cast_size_to_hint(size, new_scale_factor) };
             let max_size = shared_state.max_surface_size.map(dpi_adjuster);
             let min_size = shared_state.min_surface_size.map(dpi_adjuster);
             let surface_resize_increments =

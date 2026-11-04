@@ -2585,6 +2585,16 @@ impl WindowExtMacOS for WindowDelegate {
             _ => crate::SharingType::ReadOnly,
         }
     }
+
+    #[inline]
+    fn set_nonactivating_panel(&self, nonactivating: bool) {
+        self.toggle_style_mask(NSWindowStyleMask::NonactivatingPanel, nonactivating);
+    }
+
+    #[inline]
+    fn is_nonactivating_panel(&self) -> bool {
+        self.window().styleMask().contains(NSWindowStyleMask::NonactivatingPanel)
+    }
 }
 
 const DEFAULT_STANDARD_FRAME: NSRect =

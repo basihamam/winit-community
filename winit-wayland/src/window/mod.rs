@@ -259,6 +259,14 @@ impl Window {
         Ok(serial)
     }
 
+    /// Activate the window using an activation token.
+    #[inline]
+    pub fn activate_with_token(&self, token: impl Into<String>) {
+        if let Some(xdg_activation) = self.common.handles.xdg_activation.as_ref() {
+            xdg_activation.activate(token.into(), self.surface());
+        }
+    }
+
     #[inline]
     pub fn surface(&self) -> &WlSurface {
         self.window.wl_surface()

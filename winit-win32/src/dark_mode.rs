@@ -177,7 +177,7 @@ fn read_apps_use_light_theme() -> Option<bool> {
     }
 }
 
-fn is_high_contrast() -> bool {
+pub fn is_high_contrast() -> bool {
     let mut hc = HIGHCONTRASTA { cbSize: 0, dwFlags: 0, lpszDefaultScheme: ptr::null_mut() };
 
     let ok = unsafe {
@@ -190,4 +190,32 @@ fn is_high_contrast() -> bool {
     };
 
     ok != false.into() && util::has_flag(hc.dwFlags, HCF_HIGHCONTRASTON)
+}
+
+/// Queries the Windows system accent color configured by the user in Personalization settings.
+/// Returns `Some((r, g, b))` or `None` if unavailable.
+pub fn system_accent_color() -> Option<(u8, u8, u8)> {
+    let mut data: u32 = 0;
+    let mut data_size = std::mem::size_of::<u32>() as u32;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Windows\DWM"),
+            w!("AccentColor"),
+            RRF_RT_REG_DWORD,
+            ptr::null_mut(),
+            &mut data as *mut _ as _,
+            &mut data_size,
+        )
+    };
+
+    if status == ERROR_SUCCESS {
+        // Stored in ABGR format: 0xAABBGGRR
+        let r = (data & 0xFF) as u8;
+        let g = ((data >> 8) & 0xFF) as u8;
+        let b = ((data >> 16) & 0xFF) as u8;
+        Some((r, g, b))
+    } else {
+        None
+    }
 }
