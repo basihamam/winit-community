@@ -233,6 +233,16 @@ impl Ime {
             false
         }
     }
+
+    /// Refresh candidate window spot location on window movements.
+    pub fn refresh_spot_on_move(&self, window: ffi::Window) {
+        if self.is_destroyed() {
+            return;
+        }
+        if let Some(Some(context)) = self.inner.contexts.get(&window) {
+            context.refresh_spot(&self.xconn);
+        }
+    }
 }
 
 impl Drop for Ime {

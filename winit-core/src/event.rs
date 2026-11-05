@@ -468,6 +468,19 @@ pub enum WindowEvent {
         stage: i64,
     },
 
+    /// Multi-finger swipe gesture on a trackpad or touchpad.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - Only available on **macOS** (`swipeWithEvent:`).
+    TouchpadSwipe {
+        device_id: Option<DeviceId>,
+        /// Horizontal swipe delta (e.g. +1.0 for left swipe, -1.0 for right swipe).
+        delta_x: f32,
+        /// Vertical swipe delta (e.g. +1.0 for up swipe, -1.0 for down swipe).
+        delta_y: f32,
+    },
+
     /// The window's scale factor has changed.
     ///
     /// The following user actions can cause DPI changes:
@@ -1842,6 +1855,7 @@ mod tests {
                 phase: event::TouchPhase::Started,
             });
             with_window_event(TouchpadPressure { device_id: None, pressure: 0.0, stage: 0 });
+            with_window_event(TouchpadSwipe { device_id: None, delta_x: 0.0, delta_y: 0.0 });
             with_window_event(ThemeChanged(crate::window::Theme::Light));
             with_window_event(Occluded(true));
         }};

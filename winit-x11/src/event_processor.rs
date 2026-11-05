@@ -949,6 +949,11 @@ impl EventProcessor {
             drop(shared_state_lock);
 
             if moved {
+                if let Some(ime) = self.target.ime.as_ref() {
+                    if let Ok(ime) = ime.try_borrow() {
+                        ime.refresh_spot_on_move(xwindow as _);
+                    }
+                }
                 app.window_event(&self.target, window_id, WindowEvent::Moved(outer.into()));
             }
             outer

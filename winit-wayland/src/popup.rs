@@ -252,6 +252,7 @@ impl Popup {
                     window_events_sink,
 
                     xdg_activation,
+                    single_pixel_buffer_manager: state.single_pixel_buffer_manager.clone(),
                     attention_requested: Arc::new(AtomicBool::new(false)),
 
                     compositor: state.compositor_state.clone(),

@@ -165,6 +165,9 @@ impl EventLoop {
     /// (though note that this is not available on iOS and web).
     #[inline]
     pub fn run_app<A: ApplicationHandler + 'static>(self, app: A) -> Result<(), EventLoopError> {
+        let root_span = tracing::info_span!("winit_event_loop");
+        let _guard = root_span.enter();
+        tracing::debug!("Starting winit event loop");
         self.event_loop.run_app(app)
     }
 

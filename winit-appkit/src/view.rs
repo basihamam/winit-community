@@ -930,6 +930,22 @@ define_class!(
             });
         }
 
+        #[unsafe(method(swipeWithEvent:))]
+        fn swipe_with_event(&self, event: &NSEvent) {
+            let _entered = debug_span!("swipeWithEvent:").entered();
+
+            self.mouse_motion(event);
+
+            let delta_x = event.deltaX() as f32;
+            let delta_y = event.deltaY() as f32;
+
+            self.queue_event(WindowEvent::TouchpadSwipe {
+                device_id: None,
+                delta_x,
+                delta_y,
+            });
+        }
+
         // Allows us to receive Ctrl-Tab and Ctrl-Esc.
         // Note that this *doesn't* help with any missing Cmd inputs.
         // https://github.com/chromium/chromium/blob/a86a8a6bcfa438fa3ac2eba6f02b3ad1f8e0756f/ui/views/cocoa/bridged_content_view.mm#L816

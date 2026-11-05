@@ -14,6 +14,7 @@ use winit_core::window::{UserAttentionType, WindowId};
 use super::super::event_loop::sink::EventSink;
 use super::super::output::MonitorHandle;
 use super::super::state::WinitState;
+use super::super::types::wp_single_pixel_buffer::SinglePixelBufferManager;
 use super::super::types::xdg_activation::XdgActivationTokenData;
 
 #[derive(Debug)]
@@ -35,6 +36,9 @@ pub struct Handles {
 
     /// Xdg activation to request user attention.
     pub(crate) xdg_activation: Option<XdgActivationV1>,
+
+    /// Single pixel buffer manager for solid color backgrounds.
+    pub(crate) single_pixel_buffer_manager: Option<SinglePixelBufferManager>,
 
     /// The state of the requested attention from the `xdg_activation`.
     pub(crate) attention_requested: Arc<AtomicBool>,

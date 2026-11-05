@@ -989,6 +989,36 @@ impl Window {
         winit_core::window::DevicePosture::Unknown
     }
 
+    pub fn set_preferred_refresh_rate(&self, fps: f32) {
+        #[cfg(target_os = "android")]
+        {
+            if let Some(native_window) = self.app.native_window() {
+                unsafe {
+                    // Frame rate compatibility default is 0 in NDK ANativeWindow_setFrameRate
+                    type ANativeWindowSetFrameRateFn = unsafe extern "C" fn(
+                        *mut std::ffi::c_void,
+                        f32,
+                        i8,
+                    ) -> i32;
+                    let handle = libc::dlopen(b"libandroid.so\0".as_ptr() as *const _, libc::RTLD_LAZY);
+                    if !handle.is_null() {
+                        let sym = libc::dlsym(handle, b"ANativeWindow_setFrameRate\0".as_ptr() as *const _);
+                        if !sym.is_null() {
+                            let set_frame_rate: ANativeWindowSetFrameRateFn = std::mem::transmute(sym);
+                            let ptr = native_window.ptr().as_ptr() as *mut std::ffi::c_void;
+                            set_frame_rate(ptr, fps, 0);
+                        }
+                        libc::dlclose(handle);
+                    }
+                }
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = fps;
+        }
+    }
+
     /// Load the text of the focused field into `GameTextInput`, or an empty buffer without it.
     ///
     /// This restarts the input connection, so nothing is loaded when the keyboard already has

@@ -122,6 +122,8 @@ pub trait WindowExtAndroid {
     fn animated_ime_inset(&self) -> u32;
 
     fn device_posture(&self) -> winit_core::window::DevicePosture;
+
+    fn set_preferred_refresh_rate(&self, fps: f32);
 }
 
 impl WindowExtAndroid for dyn CoreWindow + '_ {
@@ -153,6 +155,11 @@ impl WindowExtAndroid for dyn CoreWindow + '_ {
     fn device_posture(&self) -> winit_core::window::DevicePosture {
         let window = self.cast_ref::<Window>().unwrap();
         window.device_posture()
+    }
+
+    fn set_preferred_refresh_rate(&self, fps: f32) {
+        let window = self.cast_ref::<Window>().unwrap();
+        window.set_preferred_refresh_rate(fps);
     }
 }
 

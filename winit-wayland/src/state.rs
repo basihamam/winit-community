@@ -35,6 +35,7 @@ use crate::seat::{
 };
 use crate::types::bgr_effects::BgrEffectManager;
 use crate::types::wp_fractional_scaling::FractionalScalingManager;
+use crate::types::wp_single_pixel_buffer::SinglePixelBufferManager;
 use crate::types::wp_tablet_input_v2::TabletManager;
 use crate::types::wp_viewporter::ViewporterState;
 use crate::types::xdg_activation::XdgActivationState;
@@ -127,6 +128,9 @@ pub struct WinitState {
 
     /// Fractional scaling manager.
     pub fractional_scaling_manager: Option<FractionalScalingManager>,
+
+    /// Single pixel buffer manager for zero-VRAM solid color backgrounds.
+    pub single_pixel_buffer_manager: Option<SinglePixelBufferManager>,
 
     /// Blur manager.
     pub blur_manager: Option<BgrEffectManager>,
@@ -232,6 +236,7 @@ impl WinitState {
             data_device_manager_state,
             primary_selection_manager_state,
             fractional_scaling_manager,
+            single_pixel_buffer_manager: SinglePixelBufferManager::new(globals, queue_handle).ok(),
             blur_manager: BgrEffectManager::new(globals, queue_handle).ok(),
             dmabuf_feedback: DmabufFeedbackManager::new(globals, queue_handle).ok(),
             main_drm_device: None,

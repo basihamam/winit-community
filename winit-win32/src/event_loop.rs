@@ -2119,7 +2119,7 @@ unsafe fn public_window_callback_inner(
             result = ProcResult::Value(0);
         },
 
-        WM_MOUSELEAVE => {
+        WM_MOUSELEAVE | 0x02A2 /* WM_NCMOUSELEAVE */ => {
             use winit_core::event::PointerKind::Mouse;
             use winit_core::event::WindowEvent::PointerLeft;
 

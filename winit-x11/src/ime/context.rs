@@ -402,4 +402,37 @@ impl ImeContext {
             );
         }
     }
+
+    /// Refresh the spot location on window movements (ConfigureNotify).
+    pub(crate) fn refresh_spot(&self, xconn: &Arc<XConnection>) {
+        if !self.is_allowed() || (self.ic_area.width == 0 && self.ic_area.height == 0) {
+            return;
+        }
+
+        let ic_spot = ffi::XPoint {
+            x: self.ic_area.x.saturating_add(self.ic_area.width as i16),
+            y: self.ic_area.y.saturating_add(self.ic_area.height as i16),
+        };
+
+        unsafe {
+            if let Some(preedit_attr) = util::memory::XSmartPointer::new(
+                xconn,
+                (xconn.xlib.XVaCreateNestedList)(
+                    0,
+                    ffi::XNSpotLocation_0.as_ptr(),
+                    &ic_spot,
+                    ffi::XNArea_0.as_ptr(),
+                    &self.ic_area,
+                    ptr::null_mut::<()>(),
+                ),
+            ) {
+                (xconn.xlib.XSetICValues)(
+                    self.ic,
+                    ffi::XNPreeditAttributes_0.as_ptr() as *const _,
+                    preedit_attr.ptr,
+                    ptr::null_mut::<()>(),
+                );
+            }
+        }
+    }
 }

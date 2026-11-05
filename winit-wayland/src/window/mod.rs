@@ -224,6 +224,7 @@ impl Window {
                     compositor,
 
                     xdg_activation,
+                    single_pixel_buffer_manager: state.single_pixel_buffer_manager.clone(),
                     attention_requested: Arc::new(AtomicBool::new(false)),
                 },
             },
@@ -264,6 +265,19 @@ impl Window {
     pub fn activate_with_token(&self, token: impl Into<String>) {
         if let Some(xdg_activation) = self.common.handles.xdg_activation.as_ref() {
             xdg_activation.activate(token.into(), self.surface());
+        }
+    }
+
+    /// Attach a solid color single-pixel buffer using `wp_single_pixel_buffer_v1`.
+    pub fn set_solid_color(&self, r: u32, g: u32, b: u32, a: u32) -> bool {
+        if let Some(mgr) = self.common.handles.single_pixel_buffer_manager.as_ref() {
+            let buffer = mgr.create_u32_rgba_buffer(r, g, b, a, &self.common.handles.queue_handle);
+            self.surface().attach(Some(&buffer), 0, 0);
+            self.surface().damage_buffer(0, 0, i32::MAX, i32::MAX);
+            self.surface().commit();
+            true
+        } else {
+            false
         }
     }
 

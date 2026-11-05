@@ -109,6 +109,12 @@ pub trait WindowExtWayland {
 
     /// Activate the window using an activation token.
     fn activate_with_token(&self, token: String);
+
+    /// Attach a solid color single-pixel buffer using `wp_single_pixel_buffer_v1`.
+    ///
+    /// The buffer is stretched across the surface via `wp_viewport`, achieving zero-VRAM
+    /// memory allocation for solid color backgrounds and splash screens.
+    fn set_solid_color(&self, r: u32, g: u32, b: u32, a: u32) -> bool;
 }
 
 impl WindowExtWayland for dyn CoreWindow + '_ {
@@ -129,6 +135,15 @@ impl WindowExtWayland for dyn CoreWindow + '_ {
     fn activate_with_token(&self, token: String) {
         if let Some(w) = self.cast_ref::<Window>() {
             w.activate_with_token(token);
+        }
+    }
+
+    #[inline]
+    fn set_solid_color(&self, r: u32, g: u32, b: u32, a: u32) -> bool {
+        if let Some(w) = self.cast_ref::<Window>() {
+            w.set_solid_color(r, g, b, a)
+        } else {
+            false
         }
     }
 }
