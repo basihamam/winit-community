@@ -17,7 +17,7 @@
 //! Instead, Winit guarantees that it will not register an application delegate, so the solution is
 //! to register your own application delegate, as outlined in the following example (see
 //! `objc2-app-kit` for more detailed information).
-//! ```
+//! ```ignore
 //! use objc2::rc::Retained;
 //! use objc2::runtime::ProtocolObject;
 //! use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
