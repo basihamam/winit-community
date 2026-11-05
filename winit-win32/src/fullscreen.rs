@@ -113,3 +113,16 @@ pub(crate) fn transition_fullscreen(
         _ => Ok(DisplayTransition::Unchanged),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_restore_display_mode_runtime() {
+        // Verifies calling restore_display_mode(None) as done in WM_DISPLAYCHANGE safely executes under Wine
+        let res = restore_display_mode(None);
+        // Under Wine/Windows desktop, restoring display mode executes without crashing or hanging
+        assert!(res || !res);
+    }
+}

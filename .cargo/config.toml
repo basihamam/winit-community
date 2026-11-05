@@ -5,6 +5,9 @@
 rustdocflags = ["--cfg=unreleased_changelogs"]
 rustflags = ["--cfg=unreleased_changelogs"]
 
+[target.x86_64-pc-windows-gnu]
+runner = "wine"
+
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
 

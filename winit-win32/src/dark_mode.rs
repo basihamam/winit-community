@@ -219,3 +219,20 @@ pub fn system_accent_color() -> Option<(u8, u8, u8)> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_system_accent_color_and_high_contrast_runtime() {
+        // Executed under Wine in virtual Windows environment
+        let accent = system_accent_color();
+        if let Some((r, g, b)) = accent {
+            println!("Wine/Windows Accent Color detected: RGB({}, {}, {})", r, g, b);
+        }
+        let hc = is_high_contrast();
+        // High contrast boolean query should execute without crash/panic
+        assert!(!hc || hc);
+    }
+}

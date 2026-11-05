@@ -2359,3 +2359,22 @@ fn cast_size_to_hint(size: Size, scale_factor: f64) -> (i32, i32) {
         Size::Logical(size) => size.to_physical::<i32>(scale_factor).into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dpi::LogicalSize;
+
+    #[test]
+    fn test_cast_size_to_hint_scales_logical_by_scale_factor() {
+        let size = Size::Logical(LogicalSize::new(10.0, 20.0));
+        let (w, h) = cast_size_to_hint(size, 2.0);
+        assert_eq!(w, 20);
+        assert_eq!(h, 40);
+
+        let phys = Size::Physical(PhysicalSize::new(12, 24));
+        let (pw, ph) = cast_size_to_hint(phys, 2.0);
+        assert_eq!(pw, 12);
+        assert_eq!(ph, 24);
+    }
+}

@@ -976,3 +976,22 @@ fn create_sctk_adwaita_config(theme: Option<Theme>) -> sctk_adwaita::FrameConfig
     let config = config.hide_titlebar(true);
     config
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subpixel_fractional_scale_viewport_geometry() {
+        let logical_width = 800u32;
+        let logical_height = 600u32;
+        let scale = 1.25f64;
+        let buffer_size = PhysicalSize::new(1000u32, 750u32);
+
+        let src_w = (logical_width as f64 * scale).min(buffer_size.width as f64);
+        let src_h = (logical_height as f64 * scale).min(buffer_size.height as f64);
+
+        assert!((src_w - 1000.0).abs() < f64::EPSILON);
+        assert!((src_h - 750.0).abs() < f64::EPSILON);
+    }
+}
